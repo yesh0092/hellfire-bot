@@ -28,12 +28,11 @@ class CloseTicketView(discord.ui.View):
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         guild = interaction.guild
 
-        # Permission check
         if (
             interaction.user.id != self.owner_id
             and not interaction.user.guild_permissions.administrator
         ):
-            await interaction.response.send_message(
+            return await interaction.response.send_message(
                 embed=luxury_embed(
                     title="❌ Access Denied",
                     description="Only the ticket owner or authorized staff may close this ticket.",
@@ -41,7 +40,6 @@ class CloseTicketView(discord.ui.View):
                 ),
                 ephemeral=True
             )
-            return
 
         button.disabled = True
         await interaction.message.edit(view=self)
@@ -54,8 +52,8 @@ class CloseTicketView(discord.ui.View):
             )
         )
 
-        # Cleanup state
         state.OPEN_TICKETS.pop(self.owner_id, None)
+        state.TICKET_META.pop(interaction.channel.id, None)
 
         await asyncio.sleep(3)
         await interaction.channel.delete()
@@ -71,11 +69,16 @@ class SupportView(discord.ui.View):
         self.bot = bot
         self.user = user
 
+    # -------------------------------------------------
+    # OPEN TICKET
+    # -------------------------------------------------
+
     @discord.ui.button(label="Open Support Ticket", emoji="🎟️", style=discord.ButtonStyle.primary)
-    async def open_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def open_ticket(self, interaction: discord.Interaction, _):
         guild = self.bot.get_guild(state.MAIN_GUILD_ID)
+
         if not guild:
-            await interaction.response.send_message(
+            return await interaction.response.send_message(
                 embed=luxury_embed(
                     title="⚙️ System Not Configured",
                     description="Support system is not yet configured by admins.",
@@ -83,10 +86,9 @@ class SupportView(discord.ui.View):
                 ),
                 ephemeral=True
             )
-            return
 
         if self.user.id in state.TICKET_BANNED_USERS:
-            await interaction.response.send_message(
+            return await interaction.response.send_message(
                 embed=luxury_embed(
                     title="🚫 Ticket Access Restricted",
                     description="You are currently restricted from opening support tickets.",
@@ -94,10 +96,9 @@ class SupportView(discord.ui.View):
                 ),
                 ephemeral=True
             )
-            return
 
         if self.user.id in state.OPEN_TICKETS:
-            await interaction.response.send_message(
+            return await interaction.response.send_message(
                 embed=luxury_embed(
                     title="⏳ Existing Ticket Found",
                     description="You already have an open support ticket.",
@@ -105,7 +106,6 @@ class SupportView(discord.ui.View):
                 ),
                 ephemeral=True
             )
-            return
 
         category = discord.utils.get(guild.categories, name=SUPPORT_CATEGORY_NAME)
         if not category:
@@ -124,7 +124,6 @@ class SupportView(discord.ui.View):
 
         state.OPEN_TICKETS[self.user.id] = channel.id
 
-        # Initial ticket panel
         panel = await channel.send(
             embed=luxury_embed(
                 title="🌙 Premium Support Ticket",
@@ -140,7 +139,6 @@ class SupportView(discord.ui.View):
             view=CloseTicketView(self.bot, self.user.id)
         )
 
-        # Store ticket metadata
         state.TICKET_META[channel.id] = {
             "owner": self.user.id,
             "created_at": datetime.utcnow(),
@@ -159,12 +157,51 @@ class SupportView(discord.ui.View):
             ephemeral=True
         )
 
+    # -------------------------------------------------
+    # PERSONAL / VIP ASSISTANCE (FIXED)
+    # -------------------------------------------------
+
     @discord.ui.button(label="Personal Assistance", emoji="👑", style=discord.ButtonStyle.secondary)
-    async def vip(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def vip(self, interaction: discord.Interaction, _):
+        guild = interaction.guild
+        logged = False
+
+        # 1️⃣ Support log (priority)
+        if state.SUPPORT_LOG_CHANNEL_ID:
+            ch = guild.get_channel(state.SUPPORT_LOG_CHANNEL_ID)
+            if ch:
+                await ch.send(
+                    embed=luxury_embed(
+                        title="👑 VIP Personal Assistance",
+                        description=(
+                            f"**User:** {self.user.mention}\n"
+                            f"**User ID:** `{self.user.id}`\n\n"
+                            "A VIP personal assistance request has been submitted.\n"
+                            "**Priority:** HIGH"
+                        ),
+                        color=COLOR_GOLD
+                    )
+                )
+                logged = True
+
+        # 2️⃣ Fallback → Bot log
+        if not logged and state.BOT_LOG_CHANNEL_ID:
+            ch = guild.get_channel(state.BOT_LOG_CHANNEL_ID)
+            if ch:
+                await ch.send(
+                    embed=luxury_embed(
+                        title="👑 VIP Request (Fallback)",
+                        description=f"{self.user.mention} requested personal assistance.",
+                        color=COLOR_GOLD
+                    )
+                )
+                logged = True
+
+        # 3️⃣ User confirmation (always)
         await interaction.response.send_message(
             embed=luxury_embed(
-                title="👑 VIP Assistance Requested",
-                description="A senior staff member will reach out to you shortly via DM.",
+                title="🛎️ Concierge Notified",
+                description="A senior staff member will contact you shortly via DM.",
                 color=COLOR_GOLD
             ),
             ephemeral=True
@@ -186,14 +223,15 @@ class Support(commands.Cog):
     # ------------------------------
     # DM HANDLER
     # ------------------------------
+
     @commands.Cog.listener()
-    async def on_message(self, message):
+    async def on_message(self, message: discord.Message):
         if message.author.bot:
             return
 
         # DM SUPPORT ENTRY
         if isinstance(message.channel, discord.DMChannel):
-            if message.content.lower() == "support":
+            if message.content.lower().strip() == "support":
                 await message.channel.send(
                     embed=luxury_embed(
                         title="🛎️ Elite Concierge Portal",
@@ -204,7 +242,7 @@ class Support(commands.Cog):
                 )
                 return
 
-        # Update ticket activity + status
+        # Ticket activity tracking
         if message.guild and message.channel.id in state.TICKET_META:
             meta = state.TICKET_META[message.channel.id]
             meta["last_activity"] = datetime.utcnow()
@@ -219,6 +257,7 @@ class Support(commands.Cog):
     # ------------------------------
     # LIVE PANEL UPDATES
     # ------------------------------
+
     async def update_ticket_panel(self, channel: discord.TextChannel):
         meta = state.TICKET_META.get(channel.id)
         if not meta:
@@ -239,7 +278,7 @@ class Support(commands.Cog):
         embed = luxury_embed(
             title="🌙 Premium Support Ticket",
             description=(
-                f"**Status:** {status_map.get(meta['status'])}\n"
+                f"**Status:** {status_map.get(meta['status'], '🟡 Waiting for Staff')}\n"
                 f"**Priority:** {'🔴 Critical' if meta['priority']=='high' else '🟢 Normal'}\n\n"
                 "This panel updates automatically."
             ),
@@ -249,11 +288,13 @@ class Support(commands.Cog):
         await panel.edit(embed=embed)
 
     # ------------------------------
-    # AUTO-CLOSE WATCHER (OG FEATURE)
+    # AUTO-CLOSE WATCHER
     # ------------------------------
+
     @tasks.loop(minutes=10)
     async def ticket_watcher(self):
         now = datetime.utcnow()
+
         for channel_id, meta in list(state.TICKET_META.items()):
             if now - meta["last_activity"] > timedelta(hours=24):
                 channel = self.bot.get_channel(channel_id)
