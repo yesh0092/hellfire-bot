@@ -44,6 +44,14 @@ class System(commands.Cog):
                     "• Role-tier enforcement\n"
                     "• Staff notes & workload tracking\n\n"
 
+                    "**🔊 VOICE PRESENCE SYSTEM**\n"
+                    "`!setvc <voice_channel>` → Enable VC presence (Staff+++)\n"
+                    "`!unsetvc` → Disable VC presence (Staff+++)\n"
+                    "`!vcstatus` → Voice system status (Staff)\n"
+                    "• Auto rejoin on disconnect\n"
+                    "• Silent (self-deaf)\n"
+                    "• No recording\n\n"
+
                     "**🛡️ SECURITY**\n"
                     "• Invite & spam protection\n"
                     "• Raid detection\n"
@@ -63,7 +71,7 @@ class System(commands.Cog):
                     "`!status`\n"
                     "`!panic` / `!unpanic`\n\n"
 
-                    "_Most systems operate silently to preserve a calm, "
+                    "_Most systems operate silently to maintain a calm, "
                     "luxury-grade moderation experience._"
                 ),
                 color=COLOR_GOLD
@@ -88,6 +96,7 @@ class System(commands.Cog):
                     f"🟢 **Bot Status:** Online\n"
                     f"⏱ **Uptime:** {h}h {m}m {s}s\n"
                     f"🚨 **Panic Mode:** {'ON' if state.SYSTEM_FLAGS.get('panic_mode') else 'OFF'}\n"
+                    f"🔊 **Voice Presence:** {'ON' if state.VOICE_STAY_ENABLED else 'OFF'}\n"
                     f"🧠 **Loaded Cogs:** {len(self.bot.cogs)}\n"
                     f"📁 **Bot Logs:** {'Enabled' if state.BOT_LOG_CHANNEL_ID else 'Disabled'}"
                 ),
@@ -117,10 +126,7 @@ class System(commands.Cog):
             )
         )
 
-        await self._log(
-            ctx,
-            "🚨 Panic mode enabled"
-        )
+        await self._log(ctx, "🚨 Panic mode enabled")
 
     @commands.command()
     @require_level(4)  # Staff+++
@@ -135,10 +141,7 @@ class System(commands.Cog):
             )
         )
 
-        await self._log(
-            ctx,
-            "✅ Panic mode disabled"
-        )
+        await self._log(ctx, "✅ Panic mode disabled")
 
     # =====================================================
     # BOT LOG CHANNEL
