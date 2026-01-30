@@ -3,177 +3,243 @@ from discord.ext import commands
 from datetime import timedelta, datetime
 
 from utils.embeds import luxury_embed
-from utils.config import COLOR_DANGER, COLOR_GOLD, COLOR_SECONDARY, STAFF_ROLES
+from utils.config import COLOR_GOLD, COLOR_DANGER, COLOR_SECONDARY
 from utils import state
+
+
+# ===================== CONFIG =====================
+
+WARN_TIMEOUT_THRESHOLD = 3     # 3 warns → timeout
+TIMEOUT_DURATION_MIN = 1440    # 24 hours
+WARN_KICK_THRESHOLD = 5        # 5 warns → kick
 
 
 class Moderation(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # =====================================
-    # INTERNAL HELPERS
-    # =====================================
+    # =====================================================
+    # INTERNAL: SAFE DM
+    # =====================================================
 
-    def get_staff_level(self, member: discord.Member) -> int:
-        """
-        Staff → 1
-        Staff+ → 2
-        Staff++ → 3
-        Staff+++ → 4
-        """
-        for index, role_name in enumerate(STAFF_ROLES, start=1):
-            if discord.utils.get(member.roles, name=role_name):
-                return index
-        return 0
+    async def _safe_dm(self, member: discord.Member, embed: discord.Embed) -> bool:
+        try:
+            await member.send(embed=embed)
+            return True
+        except discord.Forbidden:
+            return False
+        except Exception:
+            return False
 
-    def is_staff(self, member: discord.Member) -> bool:
-        return self.get_staff_level(member) > 0
+    # =====================================================
+    # INTERNAL: ESCALATION ENGINE
+    # =====================================================
 
-    def record_staff_action(self, staff_id: int):
-        stats = state.STAFF_STATS.setdefault(staff_id, {
-            "actions": 0,
-            "today": 0,
-            "last_action": None
-        })
-        stats["actions"] += 1
-        stats["today"] += 1
-        stats["last_action"] = datetime.utcnow()
+    async def _handle_escalation(self, ctx, member: discord.Member, warns: int):
+        # 3 WARNS → TIMEOUT
+        if warns == WARN_TIMEOUT_THRESHOLD:
+            await self._apply_timeout(
+                ctx,
+                member,
+                TIMEOUT_DURATION_MIN,
+                "Automatic timeout due to repeated warnings."
+            )
 
-    # =====================================
-    # TIMEOUT
-    # =====================================
+        # 5 WARNS → KICK
+        elif warns >= WARN_KICK_THRESHOLD:
+            await self._apply_kick(
+                ctx,
+                member,
+                "Automatic kick due to excessive warnings."
+            )
+
+    # =====================================================
+    # WARN
+    # =====================================================
 
     @commands.command()
-    async def timeout(self, ctx, member: discord.Member, minutes: int, *, reason="No reason provided"):
-        staff_level = self.get_staff_level(ctx.author)
+    @commands.has_permissions(moderate_members=True)
+    async def warn(self, ctx, member: discord.Member, *, reason="No reason provided"):
+        user_id = member.id
 
-        if staff_level < 2:
-            await ctx.send(
-                embed=luxury_embed(
-                    title="❌ Permission Denied",
-                    description="You need **Staff+** or higher to timeout members.",
-                    color=COLOR_DANGER
-                )
+        state.WARN_DATA[user_id] = state.WARN_DATA.get(user_id, 0) + 1
+        state.WARN_LOGS.setdefault(user_id, []).append({
+            "reason": reason,
+            "by": ctx.author.id,
+            "time": datetime.utcnow()
+        })
+
+        warns = state.WARN_DATA[user_id]
+
+        dm_sent = await self._safe_dm(
+            member,
+            luxury_embed(
+                title="⚠️ Official Warning Issued",
+                description=(
+                    f"You have received a warning in **{ctx.guild.name}**.\n\n"
+                    f"**Reason:** {reason}\n"
+                    f"**Total Warnings:** {warns}\n\n"
+                    "Continued violations may result in automatic punishment."
+                ),
+                color=COLOR_SECONDARY
             )
-            return
-
-        duration = timedelta(minutes=minutes)
-
-        try:
-            await member.send(
-                embed=luxury_embed(
-                    title="⏳ Temporary Timeout",
-                    description=(
-                        f"You have been temporarily restricted.\n\n"
-                        f"**Duration:** {minutes} minutes\n"
-                        f"**Reason:** {reason}"
-                    ),
-                    color=COLOR_SECONDARY
-                )
-            )
-        except:
-            pass
-
-        await member.timeout(duration, reason=reason)
+        )
 
         await ctx.send(
             embed=luxury_embed(
-                title="⏳ Timeout Applied",
-                description=f"{member.mention} has been timed out for **{minutes} minutes**.",
+                title="⚠️ Warning Logged",
+                description=(
+                    f"**User:** {member.mention}\n"
+                    f"**Reason:** {reason}\n"
+                    f"**Warn Count:** {warns}\n"
+                    f"**DM Sent:** {'✅ Yes' if dm_sent else '❌ Failed'}"
+                ),
                 color=COLOR_GOLD
             )
         )
 
-        self.record_staff_action(ctx.author.id)
+        # Escalation check
+        await self._handle_escalation(ctx, member, warns)
 
-    # =====================================
-    # KICK
-    # =====================================
+    # =====================================================
+    # REMOVE WARN
+    # =====================================================
 
     @commands.command()
-    async def kick(self, ctx, member: discord.Member, *, reason="No reason provided"):
-        staff_level = self.get_staff_level(ctx.author)
+    @commands.has_permissions(administrator=True)
+    async def unwarn(self, ctx, member: discord.Member, count: int = 1):
+        user_id = member.id
 
-        if staff_level < 3:
-            await ctx.send(
+        if user_id not in state.WARN_DATA or state.WARN_DATA[user_id] <= 0:
+            return await ctx.send(
                 embed=luxury_embed(
-                    title="❌ Permission Denied",
-                    description="You need **Staff++** or higher to kick members.",
-                    color=COLOR_DANGER
+                    title="ℹ️ No Warnings Found",
+                    description="This user has no active warnings.",
+                    color=COLOR_SECONDARY
                 )
             )
-            return
 
-        try:
-            await member.send(
-                embed=luxury_embed(
-                    title="🚫 Removal Notice",
-                    description=(
-                        f"You have been removed from the server.\n\n"
-                        f"**Reason:** {reason}"
-                    ),
-                    color=COLOR_DANGER
-                )
+        state.WARN_DATA[user_id] = max(0, state.WARN_DATA[user_id] - count)
+
+        await ctx.send(
+            embed=luxury_embed(
+                title="✅ Warnings Reduced",
+                description=(
+                    f"**User:** {member.mention}\n"
+                    f"**Remaining Warnings:** {state.WARN_DATA[user_id]}"
+                ),
+                color=COLOR_GOLD
             )
-        except:
-            pass
+        )
+
+    # =====================================================
+    # TIMEOUT
+    # =====================================================
+
+    async def _apply_timeout(self, ctx, member, minutes, reason):
+        dm_sent = await self._safe_dm(
+            member,
+            luxury_embed(
+                title="⏳ Timeout Applied",
+                description=(
+                    f"You have been timed out in **{ctx.guild.name}**.\n\n"
+                    f"**Duration:** {minutes} minutes\n"
+                    f"**Reason:** {reason}"
+                ),
+                color=COLOR_SECONDARY
+            )
+        )
+
+        await member.timeout(
+            timedelta(minutes=minutes),
+            reason=reason
+        )
+
+        await ctx.send(
+            embed=luxury_embed(
+                title="⏳ Timeout Executed",
+                description=(
+                    f"**User:** {member.mention}\n"
+                    f"**Duration:** {minutes} minutes\n"
+                    f"**DM Sent:** {'✅ Yes' if dm_sent else '❌ Failed'}"
+                ),
+                color=COLOR_GOLD
+            )
+        )
+
+    @commands.command()
+    @commands.has_permissions(moderate_members=True)
+    async def timeout(self, ctx, member: discord.Member, minutes: int, *, reason="No reason provided"):
+        await self._apply_timeout(ctx, member, minutes, reason)
+
+    # =====================================================
+    # KICK
+    # =====================================================
+
+    async def _apply_kick(self, ctx, member, reason):
+        dm_sent = await self._safe_dm(
+            member,
+            luxury_embed(
+                title="🚫 Removed from Server",
+                description=(
+                    f"You have been kicked from **{ctx.guild.name}**.\n\n"
+                    f"**Reason:** {reason}"
+                ),
+                color=COLOR_DANGER
+            )
+        )
 
         await member.kick(reason=reason)
 
         await ctx.send(
             embed=luxury_embed(
-                title="🚫 Member Kicked",
-                description=f"{member.mention} has been removed.",
+                title="👢 Member Kicked",
+                description=(
+                    f"**User:** {member.mention}\n"
+                    f"**Reason:** {reason}\n"
+                    f"**DM Sent:** {'✅ Yes' if dm_sent else '❌ Failed'}"
+                ),
                 color=COLOR_GOLD
             )
         )
 
-        self.record_staff_action(ctx.author.id)
+    @commands.command()
+    @commands.has_permissions(kick_members=True)
+    async def kick(self, ctx, member: discord.Member, *, reason="No reason provided"):
+        await self._apply_kick(ctx, member, reason)
 
-    # =====================================
+    # =====================================================
     # BAN
-    # =====================================
+    # =====================================================
 
     @commands.command()
+    @commands.has_permissions(ban_members=True)
     async def ban(self, ctx, member: discord.Member, *, reason="No reason provided"):
-        staff_level = self.get_staff_level(ctx.author)
-
-        if staff_level < 4:
-            await ctx.send(
-                embed=luxury_embed(
-                    title="❌ Permission Denied",
-                    description="You need **Staff+++** to ban members.",
-                    color=COLOR_DANGER
-                )
+        dm_sent = await self._safe_dm(
+            member,
+            luxury_embed(
+                title="⚖️ Permanently Banned",
+                description=(
+                    f"You have been banned from **{ctx.guild.name}**.\n\n"
+                    f"**Reason:** {reason}"
+                ),
+                color=COLOR_DANGER
             )
-            return
+        )
 
-        try:
-            await member.send(
-                embed=luxury_embed(
-                    title="⚖️ Permanent Ban",
-                    description=(
-                        f"You have been permanently banned.\n\n"
-                        f"**Reason:** {reason}"
-                    ),
-                    color=COLOR_DANGER
-                )
-            )
-        except:
-            pass
-
-        await member.ban(reason=reason, delete_message_days=1)
+        await member.ban(reason=reason)
 
         await ctx.send(
             embed=luxury_embed(
-                title="⚖️ Member Banned",
-                description=f"{member.mention} has been permanently banned.",
+                title="⛔ Member Banned",
+                description=(
+                    f"**User:** {member.mention}\n"
+                    f"**Reason:** {reason}\n"
+                    f"**DM Sent:** {'✅ Yes' if dm_sent else '❌ Failed'}"
+                ),
                 color=COLOR_GOLD
             )
         )
-
-        self.record_staff_action(ctx.author.id)
 
 
 async def setup(bot):
