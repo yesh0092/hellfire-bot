@@ -136,3 +136,9 @@ AUTO_ROLE_ID: int | None = None
 SYSTEM_FLAGS: dict[str, bool] = {
     "panic_mode": False,
 }
+
+# ================= BOT LOGGING =================
+
+BOT_LOG_CHANNEL_ID: int | None = None
+
+
