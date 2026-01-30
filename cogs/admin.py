@@ -3,6 +3,7 @@ from discord.ext import commands
 
 from utils.embeds import luxury_embed
 from utils.config import COLOR_GOLD, COLOR_SECONDARY, COLOR_DANGER
+from utils.permissions import require_level
 from utils import state
 
 
@@ -11,11 +12,57 @@ class Admin(commands.Cog):
         self.bot = bot
 
     # =================================================
+    # AUTO SETUP (STAFF ROLE SYSTEM)
+    # =================================================
+
+    @commands.command()
+    @require_level(4)  # Staff+++
+    async def setup(self, ctx):
+        guild = ctx.guild
+        state.MAIN_GUILD_ID = guild.id
+
+        role_map = {
+            1: "Staff",
+            2: "Staff+",
+            3: "Staff++",
+            4: "Staff+++",
+        }
+
+        created = []
+
+        for level, name in role_map.items():
+            role = discord.utils.get(guild.roles, name=name)
+            if not role:
+                role = await guild.create_role(
+                    name=name,
+                    reason="Hellfire Bot Auto Setup"
+                )
+                created.append(name)
+
+            state.STAFF_ROLE_TIERS[level] = role.id
+
+        await ctx.send(
+            embed=luxury_embed(
+                title="⚙️ Setup Complete",
+                description=(
+                    "Staff role hierarchy is now active.\n\n"
+                    "**Authority Levels:**\n"
+                    "• **Staff** → Warn & tickets\n"
+                    "• **Staff+** → Timeouts\n"
+                    "• **Staff++** → Kick\n"
+                    "• **Staff+++** → Ban & full config\n\n"
+                    f"{'🆕 Created Roles: ' + ', '.join(created) if created else 'All roles already existed.'}"
+                ),
+                color=COLOR_GOLD
+            )
+        )
+
+    # =================================================
     # WELCOME CHANNEL
     # =================================================
 
     @commands.command()
-    @commands.has_permissions(administrator=True)
+    @require_level(4)
     async def welcome(self, ctx):
         state.WELCOME_CHANNEL_ID = ctx.channel.id
         state.MAIN_GUILD_ID = ctx.guild.id
@@ -29,7 +76,7 @@ class Admin(commands.Cog):
         )
 
     @commands.command()
-    @commands.has_permissions(administrator=True)
+    @require_level(4)
     async def unwelcome(self, ctx):
         if not state.WELCOME_CHANNEL_ID:
             return await ctx.send(
@@ -55,7 +102,7 @@ class Admin(commands.Cog):
     # =================================================
 
     @commands.command()
-    @commands.has_permissions(administrator=True)
+    @require_level(4)
     async def supportlog(self, ctx):
         state.SUPPORT_LOG_CHANNEL_ID = ctx.channel.id
         state.MAIN_GUILD_ID = ctx.guild.id
@@ -63,13 +110,13 @@ class Admin(commands.Cog):
         await ctx.send(
             embed=luxury_embed(
                 title="📊 Support Log Enabled",
-                description="This channel will now receive support logs.",
+                description="This channel will now receive **support ticket logs**.",
                 color=COLOR_GOLD
             )
         )
 
     @commands.command()
-    @commands.has_permissions(administrator=True)
+    @require_level(4)
     async def unsupportlog(self, ctx):
         if not state.SUPPORT_LOG_CHANNEL_ID:
             return await ctx.send(
@@ -95,7 +142,7 @@ class Admin(commands.Cog):
     # =================================================
 
     @commands.command()
-    @commands.has_permissions(administrator=True)
+    @require_level(4)
     async def autorole(self, ctx, role: discord.Role):
         state.AUTO_ROLE_ID = role.id
         state.MAIN_GUILD_ID = ctx.guild.id
@@ -103,13 +150,13 @@ class Admin(commands.Cog):
         await ctx.send(
             embed=luxury_embed(
                 title="🏅 Autorole Enabled",
-                description=f"New members will receive **{role.name}**.",
+                description=f"New members will automatically receive **{role.name}**.",
                 color=COLOR_GOLD
             )
         )
 
     @commands.command()
-    @commands.has_permissions(administrator=True)
+    @require_level(4)
     async def unautorole(self, ctx):
         if not state.AUTO_ROLE_ID:
             return await ctx.send(
@@ -135,7 +182,7 @@ class Admin(commands.Cog):
     # =================================================
 
     @commands.command()
-    @commands.has_permissions(administrator=True)
+    @require_level(4)
     async def config(self, ctx):
         guild = ctx.guild
 
@@ -150,7 +197,7 @@ class Admin(commands.Cog):
                     f"👋 **Welcome Channel:** {welcome.mention if welcome else 'Disabled'}\n"
                     f"📊 **Support Log:** {supportlog.mention if supportlog else 'Disabled'}\n"
                     f"🏅 **Autorole:** {autorole.name if autorole else 'Disabled'}\n\n"
-                    "All settings are reversible at any time."
+                    "All settings are **reversible** at any time."
                 ),
                 color=COLOR_GOLD
             )
