@@ -160,41 +160,51 @@ class SupportView(discord.ui.View):
     # -------------------------------------------------
     # PERSONAL / VIP ASSISTANCE (FIXED)
     # -------------------------------------------------
+@discord.ui.button(label="Personal Assistance", emoji="👑", style=discord.ButtonStyle.secondary)
+async def vip(self, interaction: discord.Interaction, _):
+    # 1️⃣ ACKNOWLEDGE IMMEDIATELY (CRITICAL)
+    await interaction.response.send_message(
+        embed=luxury_embed(
+            title="🛎️ Concierge Notified",
+            description="A senior staff member will contact you shortly via DM.",
+            color=COLOR_GOLD
+        ),
+        ephemeral=True
+    )
 
-    @discord.ui.button(label="Personal Assistance", emoji="👑", style=discord.ButtonStyle.secondary)
-    async def vip(self, interaction: discord.Interaction, _):
-        guild = interaction.guild
-        logged = False
+    # 2️⃣ DO LOGGING AFTER RESPONSE (SAFE)
+    guild = interaction.guild
+    logged = False
 
-        # 1️⃣ Support log (priority)
-        if state.SUPPORT_LOG_CHANNEL_ID:
-            ch = guild.get_channel(state.SUPPORT_LOG_CHANNEL_ID)
-            if ch:
-                await ch.send(
-                    embed=luxury_embed(
-                        title="👑 VIP Personal Assistance",
-                        description=(
-                            f"**User:** {self.user.mention}\n"
-                            f"**User ID:** `{self.user.id}`\n\n"
-                            "A VIP personal assistance request has been submitted.\n"
-                            "**Priority:** HIGH"
-                        ),
-                        color=COLOR_GOLD
-                    )
+    # Support log (priority)
+    if state.SUPPORT_LOG_CHANNEL_ID:
+        ch = guild.get_channel(state.SUPPORT_LOG_CHANNEL_ID)
+        if ch:
+            await ch.send(
+                embed=luxury_embed(
+                    title="👑 VIP Personal Assistance",
+                    description=(
+                        f"**User:** {self.user.mention}\n"
+                        f"**User ID:** `{self.user.id}`\n\n"
+                        "**Priority:** HIGH"
+                    ),
+                    color=COLOR_GOLD
                 )
-                logged = True
+            )
+            logged = True
 
-        # 2️⃣ Fallback → Bot log
-        if not logged and state.BOT_LOG_CHANNEL_ID:
-            ch = guild.get_channel(state.BOT_LOG_CHANNEL_ID)
-            if ch:
-                await ch.send(
-                    embed=luxury_embed(
-                        title="👑 VIP Request (Fallback)",
-                        description=f"{self.user.mention} requested personal assistance.",
-                        color=COLOR_GOLD
-                    )
+    # Bot log fallback
+    if not logged and state.BOT_LOG_CHANNEL_ID:
+        ch = guild.get_channel(state.BOT_LOG_CHANNEL_ID)
+        if ch:
+            await ch.send(
+                embed=luxury_embed(
+                    title="👑 VIP Request (Fallback)",
+                    description=f"{self.user.mention} requested personal assistance.",
+                    color=COLOR_GOLD
                 )
+            )
+
                 logged = True
 
         # 3️⃣ User confirmation (always)
@@ -319,3 +329,4 @@ class Support(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(Support(bot))
+
