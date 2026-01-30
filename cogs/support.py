@@ -32,7 +32,7 @@ class CloseTicketView(discord.ui.View):
             interaction.user.id != self.owner_id
             and not interaction.user.guild_permissions.administrator
         ):
-            return await interaction.response.send_message(
+            await interaction.response.send_message(
                 embed=luxury_embed(
                     title="❌ Access Denied",
                     description="Only the ticket owner or authorized staff may close this ticket.",
@@ -40,6 +40,7 @@ class CloseTicketView(discord.ui.View):
                 ),
                 ephemeral=True
             )
+            return
 
         button.disabled = True
         await interaction.message.edit(view=self)
@@ -47,7 +48,7 @@ class CloseTicketView(discord.ui.View):
         await interaction.response.send_message(
             embed=luxury_embed(
                 title="🔒 Ticket Closed",
-                description="This support session has been gracefully concluded.\n\nThank you for reaching out ✨",
+                description="This support session has been gracefully concluded.",
                 color=COLOR_SECONDARY
             )
         )
@@ -60,7 +61,7 @@ class CloseTicketView(discord.ui.View):
 
 
 # =====================================================
-# SUPPORT VIEW (DM BUTTONS)
+# SUPPORT VIEW (DM PANEL)
 # =====================================================
 
 class SupportView(discord.ui.View):
@@ -72,40 +73,42 @@ class SupportView(discord.ui.View):
     # -------------------------------------------------
     # OPEN TICKET
     # -------------------------------------------------
-
     @discord.ui.button(label="Open Support Ticket", emoji="🎟️", style=discord.ButtonStyle.primary)
     async def open_ticket(self, interaction: discord.Interaction, _):
         guild = self.bot.get_guild(state.MAIN_GUILD_ID)
 
         if not guild:
-            return await interaction.response.send_message(
+            await interaction.response.send_message(
                 embed=luxury_embed(
-                    title="⚙️ System Not Configured",
-                    description="Support system is not yet configured by admins.",
+                    title="⚙️ Not Configured",
+                    description="Support system is not configured yet.",
                     color=COLOR_SECONDARY
                 ),
                 ephemeral=True
             )
+            return
 
         if self.user.id in state.TICKET_BANNED_USERS:
-            return await interaction.response.send_message(
+            await interaction.response.send_message(
                 embed=luxury_embed(
                     title="🚫 Ticket Access Restricted",
-                    description="You are currently restricted from opening support tickets.",
+                    description="You are restricted from opening support tickets.",
                     color=COLOR_DANGER
                 ),
                 ephemeral=True
             )
+            return
 
         if self.user.id in state.OPEN_TICKETS:
-            return await interaction.response.send_message(
+            await interaction.response.send_message(
                 embed=luxury_embed(
-                    title="⏳ Existing Ticket Found",
-                    description="You already have an open support ticket.",
+                    title="⏳ Ticket Already Open",
+                    description="You already have an active ticket.",
                     color=COLOR_SECONDARY
                 ),
                 ephemeral=True
             )
+            return
 
         category = discord.utils.get(guild.categories, name=SUPPORT_CATEGORY_NAME)
         if not category:
@@ -117,7 +120,7 @@ class SupportView(discord.ui.View):
         }
 
         channel = await guild.create_text_channel(
-            name=f"ticket-{self.user.name}",
+            f"ticket-{self.user.name}",
             category=category,
             overwrites=overwrites
         )
@@ -131,8 +134,7 @@ class SupportView(discord.ui.View):
                     f"**Client:** {self.user.mention}\n"
                     f"**Status:** 🟡 Waiting for Staff\n"
                     f"**Priority:** 🟢 Normal\n\n"
-                    "Please describe your issue in detail.\n"
-                    "A staff member will assist you shortly ✨"
+                    "Describe your issue below."
                 ),
                 color=COLOR_GOLD
             ),
@@ -151,71 +153,58 @@ class SupportView(discord.ui.View):
         await interaction.response.send_message(
             embed=luxury_embed(
                 title="✅ Ticket Created",
-                description="Your support ticket has been created successfully.",
+                description="Your support ticket is ready.",
                 color=COLOR_GOLD
             ),
             ephemeral=True
         )
 
     # -------------------------------------------------
-    # PERSONAL / VIP ASSISTANCE (FIXED)
+    # PERSONAL ASSISTANCE (FIXED)
     # -------------------------------------------------
-@discord.ui.button(label="Personal Assistance", emoji="👑", style=discord.ButtonStyle.secondary)
-async def vip(self, interaction: discord.Interaction, _):
-    # 1️⃣ ACKNOWLEDGE IMMEDIATELY (CRITICAL)
-    await interaction.response.send_message(
-        embed=luxury_embed(
-            title="🛎️ Concierge Notified",
-            description="A senior staff member will contact you shortly via DM.",
-            color=COLOR_GOLD
-        ),
-        ephemeral=True
-    )
-
-    # 2️⃣ DO LOGGING AFTER RESPONSE (SAFE)
-    guild = interaction.guild
-    logged = False
-
-    # Support log (priority)
-    if state.SUPPORT_LOG_CHANNEL_ID:
-        ch = guild.get_channel(state.SUPPORT_LOG_CHANNEL_ID)
-        if ch:
-            await ch.send(
-                embed=luxury_embed(
-                    title="👑 VIP Personal Assistance",
-                    description=(
-                        f"**User:** {self.user.mention}\n"
-                        f"**User ID:** `{self.user.id}`\n\n"
-                        "**Priority:** HIGH"
-                    ),
-                    color=COLOR_GOLD
-                )
-            )
-            logged = True
-
-    # Bot log fallback
-    if not logged and state.BOT_LOG_CHANNEL_ID:
-        ch = guild.get_channel(state.BOT_LOG_CHANNEL_ID)
-        if ch:
-            await ch.send(
-                embed=luxury_embed(
-                    title="👑 VIP Request (Fallback)",
-                    description=f"{self.user.mention} requested personal assistance.",
-                    color=COLOR_GOLD
-                )
-            )
-
-                logged = True
-
-        # 3️⃣ User confirmation (always)
+    @discord.ui.button(label="Personal Assistance", emoji="👑", style=discord.ButtonStyle.secondary)
+    async def vip(self, interaction: discord.Interaction, _):
+        # 1️⃣ RESPOND IMMEDIATELY (CRITICAL)
         await interaction.response.send_message(
             embed=luxury_embed(
                 title="🛎️ Concierge Notified",
-                description="A senior staff member will contact you shortly via DM.",
+                description="A senior staff member will contact you shortly.",
                 color=COLOR_GOLD
             ),
             ephemeral=True
         )
+
+        guild = interaction.guild
+        logged = False
+
+        # 2️⃣ SUPPORT LOG FIRST
+        if state.SUPPORT_LOG_CHANNEL_ID:
+            ch = guild.get_channel(state.SUPPORT_LOG_CHANNEL_ID)
+            if ch:
+                await ch.send(
+                    embed=luxury_embed(
+                        title="👑 VIP Personal Assistance",
+                        description=(
+                            f"**User:** {self.user.mention}\n"
+                            f"**User ID:** `{self.user.id}`\n\n"
+                            "**Priority:** HIGH"
+                        ),
+                        color=COLOR_GOLD
+                    )
+                )
+                logged = True
+
+        # 3️⃣ BOT LOG FALLBACK
+        if not logged and state.BOT_LOG_CHANNEL_ID:
+            ch = guild.get_channel(state.BOT_LOG_CHANNEL_ID)
+            if ch:
+                await ch.send(
+                    embed=luxury_embed(
+                        title="👑 VIP Request (Fallback)",
+                        description=f"{self.user.mention} requested personal assistance.",
+                        color=COLOR_GOLD
+                    )
+                )
 
 
 # =====================================================
@@ -230,22 +219,20 @@ class Support(commands.Cog):
     def cog_unload(self):
         self.ticket_watcher.cancel()
 
-    # ------------------------------
-    # DM HANDLER
-    # ------------------------------
-
+    # -------------------------------------------------
+    # DM ENTRY POINT
+    # -------------------------------------------------
     @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
+    async def on_message(self, message):
         if message.author.bot:
             return
 
-        # DM SUPPORT ENTRY
         if isinstance(message.channel, discord.DMChannel):
-            if message.content.lower().strip() == "support":
+            if message.content.lower() == "support":
                 await message.channel.send(
                     embed=luxury_embed(
                         title="🛎️ Elite Concierge Portal",
-                        description="Choose how you would like to proceed ✨",
+                        description="Choose how you'd like to proceed.",
                         color=COLOR_PRIMARY
                     ),
                     view=SupportView(self.bot, message.author)
@@ -256,19 +243,17 @@ class Support(commands.Cog):
         if message.guild and message.channel.id in state.TICKET_META:
             meta = state.TICKET_META[message.channel.id]
             meta["last_activity"] = datetime.utcnow()
-
-            if message.author.id == meta["owner"]:
-                meta["status"] = "waiting_staff"
-            else:
-                meta["status"] = "staff_engaged"
-
+            meta["status"] = (
+                "waiting_staff"
+                if message.author.id == meta["owner"]
+                else "staff_engaged"
+            )
             await self.update_ticket_panel(message.channel)
 
-    # ------------------------------
-    # LIVE PANEL UPDATES
-    # ------------------------------
-
-    async def update_ticket_panel(self, channel: discord.TextChannel):
+    # -------------------------------------------------
+    # PANEL UPDATES
+    # -------------------------------------------------
+    async def update_ticket_panel(self, channel):
         meta = state.TICKET_META.get(channel.id)
         if not meta:
             return
@@ -285,22 +270,20 @@ class Support(commands.Cog):
             "escalated": "🔴 Escalated"
         }
 
-        embed = luxury_embed(
-            title="🌙 Premium Support Ticket",
-            description=(
-                f"**Status:** {status_map.get(meta['status'], '🟡 Waiting for Staff')}\n"
-                f"**Priority:** {'🔴 Critical' if meta['priority']=='high' else '🟢 Normal'}\n\n"
-                "This panel updates automatically."
-            ),
-            color=COLOR_GOLD
+        await panel.edit(
+            embed=luxury_embed(
+                title="🌙 Premium Support Ticket",
+                description=(
+                    f"**Status:** {status_map.get(meta['status'])}\n"
+                    f"**Priority:** {'🔴 Critical' if meta['priority']=='high' else '🟢 Normal'}"
+                ),
+                color=COLOR_GOLD
+            )
         )
 
-        await panel.edit(embed=embed)
-
-    # ------------------------------
-    # AUTO-CLOSE WATCHER
-    # ------------------------------
-
+    # -------------------------------------------------
+    # AUTO CLOSE (24h)
+    # -------------------------------------------------
     @tasks.loop(minutes=10)
     async def ticket_watcher(self):
         now = datetime.utcnow()
@@ -311,8 +294,8 @@ class Support(commands.Cog):
                 if channel:
                     await channel.send(
                         embed=luxury_embed(
-                            title="⏳ Ticket Closed Due to Inactivity",
-                            description="This ticket was automatically closed after 24 hours of inactivity.",
+                            title="⏳ Ticket Closed",
+                            description="Closed due to inactivity.",
                             color=COLOR_SECONDARY
                         )
                     )
@@ -323,10 +306,9 @@ class Support(commands.Cog):
                 state.OPEN_TICKETS.pop(meta["owner"], None)
 
     @ticket_watcher.before_loop
-    async def before_ticket_watcher(self):
+    async def before_watcher(self):
         await self.bot.wait_until_ready()
 
 
 async def setup(bot):
     await bot.add_cog(Support(bot))
-
