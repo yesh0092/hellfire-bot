@@ -111,6 +111,7 @@ COGS = [
     "cogs.staff",
     "cogs.audit",
     "cogs.announce",
+    "cogs.voice_system",  # 👈 ADD THIS
 ]
 
 async def load_cogs():
@@ -135,3 +136,4 @@ async def main():
         await bot.start(TOKEN)
 
 asyncio.run(main())
+
