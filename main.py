@@ -24,7 +24,7 @@ bot = commands.Bot(
     help_command=None
 )
 
-# ================= CONFIG =================
+# ================= STAFF ROLES =================
 
 STAFF_ROLE_NAMES = {
     "Staff",
@@ -33,41 +33,43 @@ STAFF_ROLE_NAMES = {
     "Staff+++"
 }
 
-# ================= GLOBAL COMMAND CHECK =================
+# ================= GLOBAL STRICT GUARD =================
 
 @bot.check
-async def global_command_guard(ctx: commands.Context) -> bool:
+async def strict_command_guard(ctx: commands.Context) -> bool:
     """
-    Blocks all bot commands unless user is authorized.
+    HARD BLOCK:
+    - Normal users cannot run ANY command
+    - No help, no status, no probing
     """
 
     # 1️⃣ Allow DMs (support system)
     if ctx.guild is None:
         return True
 
-    # 2️⃣ Allow bot owner
+    # 2️⃣ Bot owner
     if await bot.is_owner(ctx.author):
         return True
 
-    # 3️⃣ Allow administrators
+    # 3️⃣ Administrator
     if ctx.author.guild_permissions.administrator:
         return True
 
-    # 4️⃣ Allow moderation permissions
+    # 4️⃣ Moderation permissions
     perms = ctx.author.guild_permissions
-    if perms.manage_guild or perms.moderate_members or perms.kick_members or perms.ban_members:
+    if (
+        perms.manage_guild
+        or perms.moderate_members
+        or perms.kick_members
+        or perms.ban_members
+    ):
         return True
 
-    # 5️⃣ Allow staff roles
-    for role in ctx.author.roles:
-        if role.name in STAFF_ROLE_NAMES:
-            return True
+    # 5️⃣ Staff role ladder
+    if any(role.name in STAFF_ROLE_NAMES for role in ctx.author.roles):
+        return True
 
-    # ❌ Block everyone else
-    await ctx.send(
-        "⛔ You are not authorized to use bot commands.",
-        delete_after=6
-    )
+    # ❌ HARD DENY
     return False
 
 # ================= COGS =================
