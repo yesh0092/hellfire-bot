@@ -3,6 +3,7 @@ import asyncio
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
+from utils import state
 
 # ================= LOAD ENV =================
 
@@ -24,71 +25,51 @@ bot = commands.Bot(
     help_command=None
 )
 
-# ================= STAFF ROLES =================
+# ================= STAFF LEVEL RESOLUTION =================
 
-STAFF_ROLE_NAMES = {
-    "Staff",
-    "Staff+",
-    "Staff++",
-    "Staff+++"
-}
+def get_user_level(member: discord.Member) -> int:
+    if member.guild_permissions.administrator:
+        return 99
 
-# ================= GLOBAL STRICT GUARD =================
+    for level, role_id in state.STAFF_ROLE_TIERS.items():
+        if role_id and any(r.id == role_id for r in member.roles):
+            return level
+
+    return 0
+
+# ================= GLOBAL COMMAND GUARD =================
 
 @bot.check
-async def strict_command_guard(ctx: commands.Context) -> bool:
-    """
-    HARD BLOCK:
-    - Normal users cannot run ANY command
-    - No help, no status, no probing
-    """
-
-    # 1️⃣ Allow DMs (support system)
+async def strict_role_guard(ctx: commands.Context) -> bool:
+    # Allow DMs (support only)
     if ctx.guild is None:
         return True
 
-    # 2️⃣ Bot owner
+    # Bot owner
     if await bot.is_owner(ctx.author):
         return True
 
-    # 3️⃣ Administrator
-    if ctx.author.guild_permissions.administrator:
-        return True
+    level = get_user_level(ctx.author)
+    if level <= 0:
+        return False
 
-    # 4️⃣ Moderation permissions
-    perms = ctx.author.guild_permissions
-    if (
-        perms.manage_guild
-        or perms.moderate_members
-        or perms.kick_members
-        or perms.ban_members
-    ):
-        return True
-
-    # 5️⃣ Staff role ladder
-    if any(role.name in STAFF_ROLE_NAMES for role in ctx.author.roles):
-        return True
-
-    # ❌ HARD DENY
-    return False
+    required = getattr(ctx.command.callback, "required_level", 1)
+    return level >= required
 
 # ================= COGS =================
 
 COGS = [
+    "cogs.admin",
     "cogs.system",
-    "cogs.support",
     "cogs.moderation",
+    "cogs.botlog",
+    "cogs.support",
+    "cogs.security",
     "cogs.warn_system",
     "cogs.staff",
-    "cogs.security",
-    "cogs.onboarding",
     "cogs.audit",
-    "cogs.admin",
     "cogs.announce",
-    "cogs.botlog",
 ]
-
-# ================= LOAD COGS =================
 
 async def load_cogs():
     for cog in COGS:
@@ -98,13 +79,9 @@ async def load_cogs():
         except Exception as e:
             print(f"❌ Failed {cog}: {e}")
 
-# ================= EVENTS =================
-
 @bot.event
 async def on_ready():
-    print(f"🌙 {bot.user} | Hellfire Hangout ONLINE")
-
-# ================= RUN =================
+    print(f"🌙 {bot.user} | ONLINE")
 
 async def main():
     async with bot:
