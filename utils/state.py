@@ -142,3 +142,19 @@ SYSTEM_FLAGS: dict[str, bool] = {
 BOT_LOG_CHANNEL_ID: int | None = None
 
 
+# ================= STAFF ROLE SYSTEM =================
+
+STAFF_ROLE_TIERS = {
+    1: None,  # Staff
+    2: None,  # Staff+
+    3: None,  # Staff++
+    4: None,  # Staff+++
+}
+
+SYSTEM_FLAGS = {
+    "panic_mode": False
+}
+
+MAIN_GUILD_ID = None
+BOT_LOG_CHANNEL_ID = None
+
