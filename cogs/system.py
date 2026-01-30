@@ -13,7 +13,7 @@ class System(commands.Cog):
         self.start_time = datetime.utcnow()
 
     # =====================================================
-    # HELP (ULTIMATE)
+    # HELP COMMAND (ULTIMATE)
     # =====================================================
 
     @commands.command()
@@ -22,49 +22,46 @@ class System(commands.Cog):
             embed=luxury_embed(
                 title="🌙 Hellfire Hangout — Command Codex",
                 description=(
-                    "**🛎️ SUPPORT SYSTEM (USER)**\n"
+                    "**🛎️ SUPPORT (USERS)**\n"
                     "`support` → Open support via DM\n"
-                    "• Button-based private tickets\n"
-                    "• Auto status & priority handling\n"
-                    "• Staff-only access\n"
-                    "• Auto close & logging\n\n"
+                    "• Button-based tickets\n"
+                    "• Auto status & priority\n"
+                    "• Ticket logs & transcripts\n\n"
 
                     "**⚠️ MODERATION (STAFF)**\n"
-                    "`!warn @user <reason>` → Issue warning\n"
-                    "`!unwarn @user [count]` → Remove warnings\n"
+                    "`!warn @user <reason>`\n"
+                    "`!unwarn @user [count]`\n"
                     "`!timeout @user <minutes> <reason>`\n"
                     "`!kick @user <reason>`\n"
                     "`!ban @user <reason>`\n"
-                    "• Auto escalation:\n"
-                    "  ├ 3 warns → 24h timeout\n"
-                    "  └ 5 warns → kick\n"
-                    "• DM-before-action (logged)\n\n"
+                    "• Progressive escalation\n"
+                    "• Auto-DM before actions\n\n"
 
-                    "**👮 STAFF INTELLIGENCE**\n"
-                    "• Staff activity tracking\n"
-                    "• Internal staff notes\n"
-                    "• Load balancing (auto-ready)\n\n"
+                    "**👮 STAFF SYSTEM**\n"
+                    "• Staff / Staff+ / Staff++ / Staff+++\n"
+                    "• Permission-based power\n"
+                    "• Staff notes & workload tracking\n\n"
 
-                    "**🛡️ SECURITY & SAFETY**\n"
-                    "• Invite & scam protection\n"
-                    "• Spam & raid detection\n"
-                    "• Panic mode lockdown\n\n"
+                    "**🛡️ SECURITY**\n"
+                    "• Invite & spam protection\n"
+                    "• Raid detection\n"
+                    "• Panic & lockdown mode\n\n"
 
                     "**⚙️ ADMIN CONTROLS**\n"
                     "`!welcome` / `!unwelcome`\n"
                     "`!supportlog` / `!unsupportlog`\n"
                     "`!autorole @role` / `!unautorole`\n"
-                    "`!config` → View configuration\n\n"
+                    "`!setbotlog` / `!unsetbotlog`\n\n"
 
                     "**📣 ANNOUNCEMENTS**\n"
                     "`!announce <message>` → DM broadcast\n\n"
 
-                    "**🧠 SYSTEM**\n"
-                    "`!status` → System health\n"
+                    "**📊 SYSTEM**\n"
+                    "`!status` → Bot health\n"
                     "`!panic` / `!unpanic`\n\n"
 
-                    "_This bot uses smart automation — many actions happen silently "
-                    "to keep the experience clean and professional._"
+                    "_Most systems work silently to keep the experience clean, "
+                    "professional, and fair._"
                 ),
                 color=COLOR_GOLD
             )
@@ -86,8 +83,8 @@ class System(commands.Cog):
                 description=(
                     f"🟢 **Status:** Online\n"
                     f"⏱ **Uptime:** {h}h {m}m {s}s\n"
-                    f"🚨 **Panic Mode:** {'ON' if state.SYSTEM_FLAGS['panic_mode'] else 'OFF'}\n"
-                    f"🧠 **Loaded Modules:** {len(self.bot.cogs)}"
+                    f"🚨 **Panic Mode:** {'ON' if state.SYSTEM_FLAGS.get('panic_mode') else 'OFF'}\n"
+                    f"🧠 **Loaded Cogs:** {len(self.bot.cogs)}"
                 ),
                 color=COLOR_SECONDARY
             )
@@ -104,10 +101,7 @@ class System(commands.Cog):
         await ctx.send(
             embed=luxury_embed(
                 title="🚨 PANIC MODE ENABLED",
-                description=(
-                    "High-risk protections are now active.\n"
-                    "Non-essential actions are restricted."
-                ),
+                description="High-risk protections are now active.",
                 color=COLOR_DANGER
             )
         )
