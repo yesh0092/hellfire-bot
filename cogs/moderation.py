@@ -4,6 +4,7 @@ from datetime import timedelta, datetime
 
 from utils.embeds import luxury_embed
 from utils.config import COLOR_GOLD, COLOR_DANGER, COLOR_SECONDARY
+from utils.permissions import require_level
 from utils import state
 
 
@@ -26,9 +27,7 @@ class Moderation(commands.Cog):
         try:
             await member.send(embed=embed)
             return True
-        except discord.Forbidden:
-            return False
-        except Exception:
+        except (discord.Forbidden, discord.HTTPException):
             return False
 
     # =====================================================
@@ -36,7 +35,7 @@ class Moderation(commands.Cog):
     # =====================================================
 
     async def _handle_escalation(self, ctx, member: discord.Member, warns: int):
-        # 3 WARNS → TIMEOUT
+        # 3 WARNS → TIMEOUT (Staff+ equivalent)
         if warns == WARN_TIMEOUT_THRESHOLD:
             await self._apply_timeout(
                 ctx,
@@ -45,7 +44,7 @@ class Moderation(commands.Cog):
                 "Automatic timeout due to repeated warnings."
             )
 
-        # 5 WARNS → KICK
+        # 5 WARNS → KICK (Staff++ equivalent)
         elif warns >= WARN_KICK_THRESHOLD:
             await self._apply_kick(
                 ctx,
@@ -54,11 +53,11 @@ class Moderation(commands.Cog):
             )
 
     # =====================================================
-    # WARN
+    # WARN (Staff)
     # =====================================================
 
     @commands.command()
-    @commands.has_permissions(moderate_members=True)
+    @require_level(1)  # Staff
     async def warn(self, ctx, member: discord.Member, *, reason="No reason provided"):
         user_id = member.id
 
@@ -102,11 +101,11 @@ class Moderation(commands.Cog):
         await self._handle_escalation(ctx, member, warns)
 
     # =====================================================
-    # REMOVE WARN
+    # REMOVE WARN (Staff+)
     # =====================================================
 
     @commands.command()
-    @commands.has_permissions(administrator=True)
+    @require_level(2)  # Staff+
     async def unwarn(self, ctx, member: discord.Member, count: int = 1):
         user_id = member.id
 
@@ -133,7 +132,7 @@ class Moderation(commands.Cog):
         )
 
     # =====================================================
-    # TIMEOUT
+    # TIMEOUT (Staff+)
     # =====================================================
 
     async def _apply_timeout(self, ctx, member, minutes, reason):
@@ -168,12 +167,12 @@ class Moderation(commands.Cog):
         )
 
     @commands.command()
-    @commands.has_permissions(moderate_members=True)
+    @require_level(2)  # Staff+
     async def timeout(self, ctx, member: discord.Member, minutes: int, *, reason="No reason provided"):
         await self._apply_timeout(ctx, member, minutes, reason)
 
     # =====================================================
-    # KICK
+    # KICK (Staff++)
     # =====================================================
 
     async def _apply_kick(self, ctx, member, reason):
@@ -204,16 +203,16 @@ class Moderation(commands.Cog):
         )
 
     @commands.command()
-    @commands.has_permissions(kick_members=True)
+    @require_level(3)  # Staff++
     async def kick(self, ctx, member: discord.Member, *, reason="No reason provided"):
         await self._apply_kick(ctx, member, reason)
 
     # =====================================================
-    # BAN
+    # BAN (Staff+++)
     # =====================================================
 
     @commands.command()
-    @commands.has_permissions(ban_members=True)
+    @require_level(4)  # Staff+++
     async def ban(self, ctx, member: discord.Member, *, reason="No reason provided"):
         dm_sent = await self._safe_dm(
             member,
