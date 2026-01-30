@@ -21,8 +21,54 @@ intents.moderation = True
 bot = commands.Bot(
     command_prefix="!",
     intents=intents,
-    help_command=None  # custom help
+    help_command=None
 )
+
+# ================= CONFIG =================
+
+STAFF_ROLE_NAMES = {
+    "Staff",
+    "Staff+",
+    "Staff++",
+    "Staff+++"
+}
+
+# ================= GLOBAL COMMAND CHECK =================
+
+@bot.check
+async def global_command_guard(ctx: commands.Context) -> bool:
+    """
+    Blocks all bot commands unless user is authorized.
+    """
+
+    # 1️⃣ Allow DMs (support system)
+    if ctx.guild is None:
+        return True
+
+    # 2️⃣ Allow bot owner
+    if await bot.is_owner(ctx.author):
+        return True
+
+    # 3️⃣ Allow administrators
+    if ctx.author.guild_permissions.administrator:
+        return True
+
+    # 4️⃣ Allow moderation permissions
+    perms = ctx.author.guild_permissions
+    if perms.manage_guild or perms.moderate_members or perms.kick_members or perms.ban_members:
+        return True
+
+    # 5️⃣ Allow staff roles
+    for role in ctx.author.roles:
+        if role.name in STAFF_ROLE_NAMES:
+            return True
+
+    # ❌ Block everyone else
+    await ctx.send(
+        "⛔ You are not authorized to use bot commands.",
+        delete_after=6
+    )
+    return False
 
 # ================= COGS =================
 
