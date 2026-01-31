@@ -141,3 +141,9 @@ VOICE_CHANNEL_ID: Optional[int] = None
 
 # Whether bot should auto-rejoin voice channel
 VOICE_STAY_ENABLED: bool = False
+
+
+# user_id -> last DM support panel timestamp
+DM_SUPPORT_COOLDOWN = {}
+
+
