@@ -156,12 +156,12 @@ class SupportView(discord.ui.View):
             ephemeral=True
         )
 
-    # ---------------- PERSONAL ASSISTANCE (FIXED) ----------------
+    # ---------------- PERSONAL ASSISTANCE ----------------
 
     @discord.ui.button(label="Personal Assistance", emoji="👑", style=discord.ButtonStyle.secondary)
     async def vip(self, interaction: discord.Interaction, _):
 
-        # 1️⃣ ACK IMMEDIATELY
+        # ACK immediately (DM-safe)
         await interaction.response.send_message(
             embed=luxury_embed(
                 title="🛎️ Concierge Notified",
@@ -171,14 +171,12 @@ class SupportView(discord.ui.View):
             ephemeral=True
         )
 
-        # 2️⃣ FETCH GUILD MANUALLY (DM SAFE)
         guild = self.bot.get_guild(state.MAIN_GUILD_ID)
         if not guild:
             return
 
         logged = False
 
-        # 3️⃣ SUPPORT LOG
         if state.SUPPORT_LOG_CHANNEL_ID:
             ch = guild.get_channel(state.SUPPORT_LOG_CHANNEL_ID)
             if ch:
@@ -195,7 +193,6 @@ class SupportView(discord.ui.View):
                 )
                 logged = True
 
-        # 4️⃣ BOT LOG FALLBACK
         if not logged and state.BOT_LOG_CHANNEL_ID:
             ch = guild.get_channel(state.BOT_LOG_CHANNEL_ID)
             if ch:
@@ -220,23 +217,38 @@ class Support(commands.Cog):
     def cog_unload(self):
         self.ticket_watcher.cancel()
 
+    # ---------------- DM HANDLER (ENHANCED) ----------------
+
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot:
             return
 
+        # 🔥 ANY DM MESSAGE → SUPPORT PANEL
         if isinstance(message.channel, discord.DMChannel):
-            if message.content.lower() == "support":
-                await message.channel.send(
-                    embed=luxury_embed(
-                        title="🛎️ Elite Concierge Portal",
-                        description="Choose how you'd like to proceed.",
-                        color=COLOR_PRIMARY
-                    ),
-                    view=SupportView(self.bot, message.author)
-                )
+            user_id = message.author.id
+            now = datetime.utcnow()
+
+            last = state.DM_SUPPORT_COOLDOWN.get(user_id)
+            if last and (now - last).total_seconds() < 60:
                 return
 
+            state.DM_SUPPORT_COOLDOWN[user_id] = now
+
+            await message.channel.send(
+                embed=luxury_embed(
+                    title="🛎️ Elite Concierge Portal",
+                    description=(
+                        "Welcome to **Hellfire Hangout Support** ✨\n\n"
+                        "Choose how you'd like to proceed below."
+                    ),
+                    color=COLOR_PRIMARY
+                ),
+                view=SupportView(self.bot, message.author)
+            )
+            return
+
+        # Ticket activity tracking
         if message.guild and message.channel.id in state.TICKET_META:
             meta = state.TICKET_META[message.channel.id]
             meta["last_activity"] = datetime.utcnow()
@@ -246,6 +258,8 @@ class Support(commands.Cog):
                 else "staff_engaged"
             )
             await self.update_ticket_panel(message.channel)
+
+    # ---------------- PANEL UPDATE ----------------
 
     async def update_ticket_panel(self, channel):
         meta = state.TICKET_META.get(channel.id)
@@ -261,12 +275,14 @@ class Support(commands.Cog):
             embed=luxury_embed(
                 title="🌙 Premium Support Ticket",
                 description=(
-                    f"**Status:** {meta['status'].replace('_',' ').title()}\n"
+                    f"**Status:** {meta['status'].replace('_', ' ').title()}\n"
                     f"**Priority:** {'🔴 Critical' if meta['priority']=='high' else '🟢 Normal'}"
                 ),
                 color=COLOR_GOLD
             )
         )
+
+    # ---------------- AUTO CLOSE ----------------
 
     @tasks.loop(minutes=10)
     async def ticket_watcher(self):
