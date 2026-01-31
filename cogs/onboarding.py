@@ -7,7 +7,7 @@ from utils.config import COLOR_GOLD, COLOR_SECONDARY
 from utils import state
 
 
-WELCOME_GIF_URL = "https://media.discordapp.net/attachments/XXXXXXXX/welcome.gif"
+WELCOME_GIF_URL = "https://github.com/yesh0092/hellfire-bot/blob/916d3f67d1ec0c98ff7d2072165beda0b8544834/welcome%20hell.mp4"
 
 
 # =====================================================
@@ -182,3 +182,4 @@ class Onboarding(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(Onboarding(bot))
+
