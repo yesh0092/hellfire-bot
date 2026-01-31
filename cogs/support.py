@@ -68,14 +68,14 @@ class SupportView(discord.ui.View):
         self.bot = bot
         self.user = user
 
-    async def clear_session(self):
+    def clear_dm_session(self):
         state.DM_SUPPORT_ACTIVE.discard(self.user.id)
 
     # ---------------- CREATE TICKET ----------------
 
     @discord.ui.button(label="Create Ticket", emoji="🎟️", style=discord.ButtonStyle.primary)
     async def open_ticket(self, interaction: discord.Interaction, _):
-        await self.clear_session()
+        self.clear_dm_session()
 
         guild = self.bot.get_guild(state.MAIN_GUILD_ID)
         if not guild:
@@ -111,9 +111,9 @@ class SupportView(discord.ui.View):
             )
             return
 
-        category = discord.utils.get(guild.categories, name=SUPPORT_CATEGORY_NAME)
-        if not category:
-            category = await guild.create_category(SUPPORT_CATEGORY_NAME)
+        category = discord.utils.get(
+            guild.categories, name=SUPPORT_CATEGORY_NAME
+        ) or await guild.create_category(SUPPORT_CATEGORY_NAME)
 
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
@@ -164,7 +164,7 @@ class SupportView(discord.ui.View):
 
     @discord.ui.button(label="Personal Assistance", emoji="👑", style=discord.ButtonStyle.secondary)
     async def vip(self, interaction: discord.Interaction, _):
-        await self.clear_session()
+        self.clear_dm_session()
 
         await interaction.response.send_message(
             embed=luxury_embed(
@@ -179,11 +179,11 @@ class SupportView(discord.ui.View):
         if not guild:
             return
 
-        ch = guild.get_channel(
+        log_channel = guild.get_channel(
             state.SUPPORT_LOG_CHANNEL_ID or state.BOT_LOG_CHANNEL_ID
         )
-        if ch:
-            await ch.send(
+        if log_channel:
+            await log_channel.send(
                 embed=luxury_embed(
                     title="👑 VIP Assistance Request",
                     description=(
@@ -199,16 +199,17 @@ class SupportView(discord.ui.View):
 
     @discord.ui.button(label="Cancel", emoji="❌", style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, _):
-        await self.clear_session()
+        self.clear_dm_session()
 
-        # Delete the support panel completely (embed + buttons)
-        await interaction.message.delete()
-
-        # Plain text confirmation (no embed, no footer)
-        await interaction.response.send_message(
-            "Ticket creation cancelled.",
-            ephemeral=True
+        # EDIT SAME MESSAGE → remove embed, buttons, footer
+        await interaction.message.edit(
+            content="Ticket creation cancelled.",
+            embed=None,
+            view=None
         )
+
+        # Required interaction acknowledgement
+        await interaction.response.defer()
 
 
 # =====================================================
@@ -233,11 +234,11 @@ class Support(commands.Cog):
         if message.author.bot:
             return
 
-        # DM SUPPORT HANDLER
+        # DM SUPPORT FLOW
         if isinstance(message.channel, discord.DMChannel):
             user_id = message.author.id
 
-            # Panel already sent → stay silent
+            # Panel already shown → stay silent
             if user_id in state.DM_SUPPORT_ACTIVE:
                 return
 
