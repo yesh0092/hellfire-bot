@@ -7,6 +7,9 @@ from utils.config import COLOR_GOLD, COLOR_SECONDARY
 from utils import state
 
 
+WELCOME_GIF_URL = "https://media.discordapp.net/attachments/XXXXXXXX/welcome.gif"
+
+
 # =====================================================
 # ONBOARDING VIEW
 # =====================================================
@@ -28,26 +31,26 @@ class OnboardingView(discord.ui.View):
 
         await interaction.response.send_message(
             embed=luxury_embed(
-                title="✨ Onboarding Complete",
+                title="Onboarding Complete",
                 description=(
-                    "Thank you for joining **Hellfire Hangout**.\n\n"
-                    "You are now fully integrated into our premium ecosystem.\n"
-                    "Support is always available via DM by typing `support`."
+                    "Welcome aboard.\n\n"
+                    "Your access to **Hellfire Hangout** is now fully active.\n"
+                    "If you ever need assistance, simply type `support` here."
                 ),
                 color=COLOR_GOLD
             ),
             ephemeral=True
         )
 
-    @discord.ui.button(label="Friends", emoji="👥", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Friends", style=discord.ButtonStyle.primary)
     async def friends(self, interaction: discord.Interaction, _):
         await self.finalize(interaction)
 
-    @discord.ui.button(label="Social Media", emoji="📱", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="Social Media", style=discord.ButtonStyle.secondary)
     async def social(self, interaction: discord.Interaction, _):
         await self.finalize(interaction)
 
-    @discord.ui.button(label="Other", emoji="🌐", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="Other", style=discord.ButtonStyle.success)
     async def other(self, interaction: discord.Interaction, _):
         await self.finalize(interaction)
 
@@ -77,44 +80,57 @@ class Onboarding(commands.Cog):
                 except:
                     pass
 
-        # Welcome channel message
+        # ---------------- WELCOME CHANNEL ----------------
+
         if state.WELCOME_CHANNEL_ID:
             channel = guild.get_channel(state.WELCOME_CHANNEL_ID)
             if channel:
-                await channel.send(
-                    embed=luxury_embed(
-                        title="🔥 Welcome to Hellfire Hangout",
-                        description=(
-                            f"{member.mention} has entered our premium domain.\n\n"
-                            "A realm of elite discussion, support, and experience awaits ✨"
-                        ),
-                        color=COLOR_GOLD
-                    )
+                embed = luxury_embed(
+                    title="Welcome to Hellfire Hangout",
+                    description=(
+                        f"{member.mention}\n\n"
+                        "You’ve joined a space built for quality discussion, support, "
+                        "and a premium community experience."
+                    ),
+                    color=COLOR_GOLD
                 )
 
-        # DM onboarding
+                embed.set_image(url=WELCOME_GIF_URL)
+                embed.set_thumbnail(url=member.display_avatar.url)
+
+                await channel.send(embed=embed)
+
+        # ---------------- DM WELCOME ----------------
+
         try:
-            await member.send(
-                embed=luxury_embed(
-                    title="🌙 Welcome to Hellfire Hangout",
-                    description=(
-                        "You’ve joined an exclusive sanctuary of premium conversation.\n\n"
-                        "At any time, type `support` here to reach our elite concierge.\n\n"
-                        "Before you begin — may we ask one thing?"
-                    ),
-                    color=COLOR_SECONDARY
-                )
+            embed = luxury_embed(
+                title="Welcome",
+                description=(
+                    "We’re glad to have you here.\n\n"
+                    "This server is designed for focused conversation and quality support.\n"
+                    "Whenever you need help, just type `support`."
+                ),
+                color=COLOR_SECONDARY
             )
 
-            msg = await member.send(
-                embed=luxury_embed(
-                    title="🌌 Discovery Inquiry",
-                    description=(
-                        "How did you discover **Hellfire Hangout**?\n\n"
-                        "Your insight helps us refine our invitation process ✨"
-                    ),
-                    color=COLOR_SECONDARY
+            embed.set_thumbnail(url=member.display_avatar.url)
+            embed.set_image(url=WELCOME_GIF_URL)
+
+            await member.send(embed=embed)
+
+            inquiry = luxury_embed(
+                title="Quick Question",
+                description=(
+                    "How did you discover **Hellfire Hangout**?\n\n"
+                    "Your response helps us improve our reach."
                 ),
+                color=COLOR_SECONDARY
+            )
+
+            inquiry.set_thumbnail(url=member.display_avatar.url)
+
+            msg = await member.send(
+                embed=inquiry,
                 view=OnboardingView(member)
             )
 
@@ -124,7 +140,7 @@ class Onboarding(commands.Cog):
             pass
 
     # -------------------------------------
-    # DM HANDLER (SUPPORT + ONBOARDING CLEANUP)
+    # DM HANDLER (ONBOARDING CLEANUP + SUPPORT)
     # -------------------------------------
 
     @commands.Cog.listener()
@@ -132,7 +148,6 @@ class Onboarding(commands.Cog):
         if message.author.bot:
             return
 
-        # DM only
         if not isinstance(message.channel, discord.DMChannel):
             return
 
@@ -148,17 +163,17 @@ class Onboarding(commands.Cog):
 
             await message.channel.send(
                 embed=luxury_embed(
-                    title="✨ Onboarding Complete",
+                    title="Onboarding Complete",
                     description=(
-                        "Thank you for your response.\n\n"
-                        "You’re now fully settled into **Hellfire Hangout**.\n"
-                        "Support is always available by typing `support` ✨"
+                        "Thanks for the response.\n\n"
+                        "You’re all set. Enjoy your time in **Hellfire Hangout**.\n"
+                        "Type `support` anytime if you need assistance."
                     ),
                     color=COLOR_GOLD
                 )
             )
 
-        # Forward support keyword to support cog
+        # Forward support keyword
         if message.content.lower() == "support":
             support_cog = self.bot.get_cog("Support")
             if support_cog:
