@@ -1,13 +1,12 @@
 import discord
 from discord.ext import commands
-from datetime import datetime
 
 from utils.embeds import luxury_embed
 from utils.config import COLOR_GOLD, COLOR_SECONDARY
 from utils import state
 
 
-WELCOME_GIF_URL = "https://github.com/yesh0092/hellfire-bot/blob/916d3f67d1ec0c98ff7d2072165beda0b8544834/welcome%20hell.mp4"
+WELCOME_GIF_URL = "https://media.discordapp.net/attachments/XXXXXXXX/welcome.gif"
 
 
 # =====================================================
@@ -15,11 +14,13 @@ WELCOME_GIF_URL = "https://github.com/yesh0092/hellfire-bot/blob/916d3f67d1ec0c9
 # =====================================================
 
 class OnboardingView(discord.ui.View):
-    def __init__(self, member: discord.Member):
+    def __init__(self, bot: commands.Bot, member: discord.Member):
         super().__init__(timeout=120)
+        self.bot = bot
         self.member = member
 
     async def finalize(self, interaction: discord.Interaction):
+        # Remove stored onboarding message
         msg_id = state.ONBOARDING_MESSAGES.pop(self.member.id, None)
 
         if msg_id:
@@ -35,7 +36,7 @@ class OnboardingView(discord.ui.View):
                 description=(
                     "Welcome aboard.\n\n"
                     "Your access to **Hellfire Hangout** is now fully active.\n"
-                    "If you ever need assistance, simply type `support` here."
+                    "If you ever need assistance, simply type `support`."
                 ),
                 color=COLOR_GOLD
             ),
@@ -60,8 +61,11 @@ class OnboardingView(discord.ui.View):
 # =====================================================
 
 class Onboarding(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+        if not hasattr(state, "ONBOARDING_MESSAGES"):
+            state.ONBOARDING_MESSAGES = {}
 
     # -------------------------------------
     # MEMBER JOIN
@@ -71,7 +75,7 @@ class Onboarding(commands.Cog):
     async def on_member_join(self, member: discord.Member):
         guild = member.guild
 
-        # Autorole
+        # ---------------- AUTO ROLE ----------------
         if state.AUTO_ROLE_ID:
             role = guild.get_role(state.AUTO_ROLE_ID)
             if role:
@@ -80,8 +84,7 @@ class Onboarding(commands.Cog):
                 except:
                     pass
 
-        # ---------------- WELCOME CHANNEL ----------------
-
+        # ---------------- SERVER WELCOME ----------------
         if state.WELCOME_CHANNEL_ID:
             channel = guild.get_channel(state.WELCOME_CHANNEL_ID)
             if channel:
@@ -89,34 +92,33 @@ class Onboarding(commands.Cog):
                     title="Welcome to Hellfire Hangout",
                     description=(
                         f"{member.mention}\n\n"
-                        "You’ve joined a space built for quality discussion, support, "
-                        "and a premium community experience."
+                        "You’ve joined a space built for meaningful discussion, "
+                        "quality support, and a premium community experience."
                     ),
                     color=COLOR_GOLD
                 )
 
-                embed.set_image(url=WELCOME_GIF_URL)
                 embed.set_thumbnail(url=member.display_avatar.url)
+                embed.set_image(url=WELCOME_GIF_URL)
 
                 await channel.send(embed=embed)
 
         # ---------------- DM WELCOME ----------------
-
         try:
-            embed = luxury_embed(
+            welcome = luxury_embed(
                 title="Welcome",
                 description=(
                     "We’re glad to have you here.\n\n"
-                    "This server is designed for focused conversation and quality support.\n"
-                    "Whenever you need help, just type `support`."
+                    "This server values clarity, respect, and quality interaction.\n"
+                    "Whenever you need help, simply type `support`."
                 ),
                 color=COLOR_SECONDARY
             )
 
-            embed.set_thumbnail(url=member.display_avatar.url)
-            embed.set_image(url=WELCOME_GIF_URL)
+            welcome.set_thumbnail(url=member.display_avatar.url)
+            welcome.set_image(url=WELCOME_GIF_URL)
 
-            await member.send(embed=embed)
+            await member.send(embed=welcome)
 
             inquiry = luxury_embed(
                 title="Quick Question",
@@ -131,7 +133,7 @@ class Onboarding(commands.Cog):
 
             msg = await member.send(
                 embed=inquiry,
-                view=OnboardingView(member)
+                view=OnboardingView(self.bot, member)
             )
 
             state.ONBOARDING_MESSAGES[member.id] = msg.id
@@ -140,7 +142,7 @@ class Onboarding(commands.Cog):
             pass
 
     # -------------------------------------
-    # DM HANDLER (ONBOARDING CLEANUP + SUPPORT)
+    # DM HANDLER (ONBOARDING + SUPPORT)
     # -------------------------------------
 
     @commands.Cog.listener()
@@ -148,14 +150,19 @@ class Onboarding(commands.Cog):
         if message.author.bot:
             return
 
+        # ⚠️ CRITICAL: allow commands to continue working
+        await self.bot.process_commands(message)
+
         if not isinstance(message.channel, discord.DMChannel):
             return
 
-        # Cleanup onboarding if user replies manually
-        if message.author.id in state.ONBOARDING_MESSAGES:
+        user_id = message.author.id
+
+        # Manual onboarding completion
+        if user_id in state.ONBOARDING_MESSAGES:
             try:
                 msg = await message.channel.fetch_message(
-                    state.ONBOARDING_MESSAGES.pop(message.author.id)
+                    state.ONBOARDING_MESSAGES.pop(user_id)
                 )
                 await msg.delete()
             except:
@@ -173,13 +180,16 @@ class Onboarding(commands.Cog):
                 )
             )
 
-        # Forward support keyword
+        # Forward support keyword safely
         if message.content.lower() == "support":
             support_cog = self.bot.get_cog("Support")
             if support_cog:
                 await support_cog.on_message(message)
 
 
+# =====================================================
+# SETUP
+# =====================================================
+
 async def setup(bot):
     await bot.add_cog(Onboarding(bot))
-
