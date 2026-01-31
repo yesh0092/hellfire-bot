@@ -68,17 +68,14 @@ class SupportView(discord.ui.View):
         self.bot = bot
         self.user = user
 
-    async def disable_and_clear(self, interaction):
+    async def clear_session(self):
         state.DM_SUPPORT_ACTIVE.discard(self.user.id)
-        for item in self.children:
-            item.disabled = True
-        await interaction.message.edit(view=self)
 
     # ---------------- CREATE TICKET ----------------
 
     @discord.ui.button(label="Create Ticket", emoji="🎟️", style=discord.ButtonStyle.primary)
     async def open_ticket(self, interaction: discord.Interaction, _):
-        await self.disable_and_clear(interaction)
+        await self.clear_session()
 
         guild = self.bot.get_guild(state.MAIN_GUILD_ID)
         if not guild:
@@ -167,7 +164,7 @@ class SupportView(discord.ui.View):
 
     @discord.ui.button(label="Personal Assistance", emoji="👑", style=discord.ButtonStyle.secondary)
     async def vip(self, interaction: discord.Interaction, _):
-        await self.disable_and_clear(interaction)
+        await self.clear_session()
 
         await interaction.response.send_message(
             embed=luxury_embed(
@@ -202,14 +199,14 @@ class SupportView(discord.ui.View):
 
     @discord.ui.button(label="Cancel", emoji="❌", style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, _):
-        await self.disable_and_clear(interaction)
+        await self.clear_session()
 
+        # Delete the support panel completely (embed + buttons)
+        await interaction.message.delete()
+
+        # Plain text confirmation (no embed, no footer)
         await interaction.response.send_message(
-            embed=luxury_embed(
-                title="❌ Support Cancelled",
-                description="Support session closed. You may DM again anytime.",
-                color=COLOR_SECONDARY
-            ),
+            "Ticket creation cancelled.",
             ephemeral=True
         )
 
@@ -236,11 +233,11 @@ class Support(commands.Cog):
         if message.author.bot:
             return
 
-        # DM HANDLING
+        # DM SUPPORT HANDLER
         if isinstance(message.channel, discord.DMChannel):
             user_id = message.author.id
 
-            # Already sent panel → ignore further messages
+            # Panel already sent → stay silent
             if user_id in state.DM_SUPPORT_ACTIVE:
                 return
 
