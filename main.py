@@ -19,13 +19,15 @@ if not TOKEN:
     raise RuntimeError("❌ TOKEN not found in environment variables")
 
 # =====================================================
-# INTENTS
+# INTENTS (MUST MATCH DEV PORTAL)
 # =====================================================
 
 intents = discord.Intents.default()
+intents.guilds = True
 intents.members = True
 intents.message_content = True
 intents.moderation = True
+intents.presences = True   # 🔴 REQUIRED FOR ONLINE STATUS
 
 # =====================================================
 # BOT
@@ -57,10 +59,6 @@ def get_user_level(member: discord.Member) -> int:
 
 @bot.check
 async def block_commands_in_dm(ctx: commands.Context) -> bool:
-    """
-    HARD RULE:
-    Commands NEVER run in DMs.
-    """
     if ctx.guild is None:
         try:
             await ctx.send(
@@ -78,14 +76,9 @@ async def block_commands_in_dm(ctx: commands.Context) -> bool:
 
 @bot.check
 async def strict_role_guard(ctx: commands.Context) -> bool:
-    """
-    STAFF + ROLE GUARD
-    """
-    # Owner bypass
     if await bot.is_owner(ctx.author):
         return True
 
-    # Safety
     if not ctx.guild:
         return False
 
@@ -121,22 +114,18 @@ async def strict_role_guard(ctx: commands.Context) -> bool:
 async def on_command_error(ctx: commands.Context, error):
     if isinstance(error, commands.CheckFailure):
         return
-
+    if isinstance(error, commands.CommandNotFound):
+        return
     if isinstance(error, commands.MissingRequiredArgument):
         await ctx.send("⚠️ Missing required arguments.")
         return
-
     if isinstance(error, commands.BadArgument):
         await ctx.send("⚠️ Invalid argument provided.")
         return
-
-    if isinstance(error, commands.CommandNotFound):
-        return
-
     raise error
 
 # =====================================================
-# MESSAGE ROUTER (ANTI DOUBLE EXECUTION)
+# MESSAGE ROUTER (NO DOUBLE EXECUTION)
 # =====================================================
 
 @bot.event
@@ -144,7 +133,7 @@ async def on_message(message: discord.Message):
     if message.author.bot:
         return
 
-    # ALWAYS allow message events (support/onboarding/security)
+    # Always allow message flow for support/onboarding/security
     await bot.process_commands(message)
 
 # =====================================================
@@ -175,19 +164,27 @@ async def load_cogs():
             print(f"❌ Failed {cog}: {e}")
 
 # =====================================================
-# READY
+# READY (🔥 THIS IS THE KEY FIX 🔥)
 # =====================================================
 
 @bot.event
 async def on_ready():
+    await bot.change_presence(
+        status=discord.Status.online,
+        activity=discord.Activity(
+            type=discord.ActivityType.watching,
+            name="HellFire Hangout 🔥"
+        )
+    )
+
     print(f"🌙 {bot.user} | HellFire Hangout ONLINE")
     print("🔒 Commands locked to server only")
     print("🛡 Staff guard active")
     print("⚙️ Single-pass command execution")
-    print("🔊 Voice system & support systems armed")
+    print("🔊 Voice + Support systems active")
 
 # =====================================================
-# MAIN
+# MAIN (RAILWAY SAFE)
 # =====================================================
 
 async def main():
