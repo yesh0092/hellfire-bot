@@ -36,7 +36,7 @@ class BotLog(commands.Cog):
                     color=color
                 )
             )
-        except discord.HTTPException:
+        except (discord.Forbidden, discord.HTTPException):
             pass
 
     # =====================================================
@@ -45,26 +45,31 @@ class BotLog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
+        if not self.bot.user:
+            return
+
         await self.log(
             "🤖 Bot Online",
             (
                 f"**{self.bot.user}** is now online.\n\n"
-                f"🧠 Loaded Cogs: `{len(self.bot.cogs)}`\n"
-                f"⏱ Time: `{datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}`"
+                f"🧠 **Loaded Cogs:** `{len(self.bot.cogs)}`\n"
+                f"⏱ **Timestamp:** `{datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}`"
             ),
             COLOR_GOLD
         )
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx, error):
-        # Ignore missing permissions silently
+        # Ignore permission-related failures silently
         if isinstance(error, commands.CheckFailure):
             return
+
+        command_name = ctx.command.qualified_name if ctx.command else "Unknown"
 
         await self.log(
             "❌ Command Error",
             (
-                f"**Command:** `{ctx.command}`\n"
+                f"**Command:** `{command_name}`\n"
                 f"**User:** {ctx.author} (`{ctx.author.id}`)\n"
                 f"**Channel:** {ctx.channel.mention}\n"
                 f"**Error:** `{error}`"
@@ -77,20 +82,21 @@ class BotLog(commands.Cog):
     # =====================================================
 
     @commands.command()
+    @commands.guild_only()
     @require_level(4)  # Staff+++
-    async def setbotlog(self, ctx):
+    async def setbotlog(self, ctx: commands.Context):
         state.BOT_LOG_CHANNEL_ID = ctx.channel.id
         state.MAIN_GUILD_ID = ctx.guild.id
 
         await ctx.send(
             embed=luxury_embed(
-                title="📜 Bot Log Channel Set",
+                title="📜 Bot Log Channel Configured",
                 description=(
                     "This channel will now receive:\n"
-                    "• System logs\n"
-                    "• Command errors\n"
-                    "• Security alerts\n"
-                    "• Bot lifecycle events"
+                    "• System lifecycle events\n"
+                    "• Command execution errors\n"
+                    "• Security and audit alerts\n"
+                    "• Internal bot notifications"
                 ),
                 color=COLOR_GOLD
             )
@@ -98,18 +104,19 @@ class BotLog(commands.Cog):
 
         await self.log(
             "📜 Bot Logging Enabled",
-            f"Logging channel set by {ctx.author.mention}",
+            f"Logging channel configured by {ctx.author.mention}.",
             COLOR_GOLD
         )
 
     @commands.command()
+    @commands.guild_only()
     @require_level(4)  # Staff+++
-    async def unsetbotlog(self, ctx):
+    async def unsetbotlog(self, ctx: commands.Context):
         if not state.BOT_LOG_CHANNEL_ID:
             return await ctx.send(
                 embed=luxury_embed(
-                    title="ℹ️ Already Disabled",
-                    description="Bot logging is already disabled.",
+                    title="ℹ️ Bot Logging Already Disabled",
+                    description="There is currently **no bot log channel** configured.",
                     color=COLOR_SECONDARY
                 )
             )
@@ -119,7 +126,7 @@ class BotLog(commands.Cog):
         await ctx.send(
             embed=luxury_embed(
                 title="❌ Bot Logging Disabled",
-                description="System & security logs will no longer be sent.",
+                description="System, error, and security logs will no longer be sent.",
                 color=COLOR_DANGER
             )
         )
