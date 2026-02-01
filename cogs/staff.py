@@ -8,8 +8,10 @@ from utils import state
 
 
 class Staff(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+    async def cog_load(self):
         self.activity_monitor.start()
 
     def cog_unload(self):
@@ -37,10 +39,8 @@ class Staff(commands.Cog):
     # =====================================
 
     @commands.command()
-    async def note(self, ctx, user: discord.Member, *, note: str):
-        """
-        Add a private staff note about a user.
-        """
+    @commands.guild_only()
+    async def note(self, ctx: commands.Context, user: discord.Member, *, note: str):
         if not self.is_staff(ctx.author):
             return
 
@@ -54,7 +54,7 @@ class Staff(commands.Cog):
         await ctx.send(
             embed=luxury_embed(
                 title="📝 Staff Note Added",
-                description=f"Note recorded privately for **{user}**.",
+                description=f"A private staff note has been recorded for **{user}**.",
                 color=COLOR_GOLD
             )
         )
@@ -62,10 +62,8 @@ class Staff(commands.Cog):
         self.record_action(ctx.author.id)
 
     @commands.command()
-    async def notes(self, ctx, user: discord.Member):
-        """
-        View staff notes for a user.
-        """
+    @commands.guild_only()
+    async def notes(self, ctx: commands.Context, user: discord.Member):
         if not self.is_staff(ctx.author):
             return
 
@@ -74,7 +72,7 @@ class Staff(commands.Cog):
             await ctx.send(
                 embed=luxury_embed(
                     title="📝 Staff Notes",
-                    description="No internal notes found for this user.",
+                    description="No internal notes are recorded for this user.",
                     color=COLOR_SECONDARY
                 )
             )
@@ -82,7 +80,10 @@ class Staff(commands.Cog):
 
         desc = ""
         for n in notes[-5:]:
-            desc += f"• <@{n['by']}> — {n['note']} ({n['time'].strftime('%Y-%m-%d')})\n"
+            desc += (
+                f"• <@{n['by']}> — {n['note']} "
+                f"(`{n['time'].strftime('%Y-%m-%d')}`)\n"
+            )
 
         await ctx.send(
             embed=luxury_embed(
@@ -97,10 +98,8 @@ class Staff(commands.Cog):
     # =====================================
 
     @commands.command()
-    async def staff(self, ctx):
-        """
-        Shows staff activity snapshot.
-        """
+    @commands.guild_only()
+    async def staff(self, ctx: commands.Context):
         staff_members = [m for m in ctx.guild.members if self.is_staff(m)]
 
         lines = []
@@ -118,58 +117,55 @@ class Staff(commands.Cog):
         )
 
     # =====================================
-    # BURNOUT & ABUSE MONITOR (OG FEATURE)
+    # BURNOUT & ABUSE MONITOR
     # =====================================
 
     @tasks.loop(minutes=30)
     async def activity_monitor(self):
-        """
-        Detect staff burnout or abuse silently.
-        """
         now = datetime.utcnow()
 
         for staff_id, stats in state.STAFF_STATS.items():
             last = stats.get("last_action")
             today = stats.get("today", 0)
 
+            user = self.bot.get_user(staff_id)
+
             # Burnout detection
-            if today >= 20:
-                user = self.bot.get_user(staff_id)
-                if user:
-                    try:
-                        await user.send(
-                            embed=luxury_embed(
-                                title="🧠 Staff Wellness Notice",
-                                description=(
-                                    "You’ve been very active today.\n\n"
-                                    "Consider taking a short break to avoid burnout ✨"
-                                ),
-                                color=COLOR_SECONDARY
-                            )
+            if today >= 20 and user:
+                try:
+                    await user.send(
+                        embed=luxury_embed(
+                            title="🧠 Staff Wellness Reminder",
+                            description=(
+                                "You’ve been very active today.\n\n"
+                                "Consider taking a short break to avoid burnout."
+                            ),
+                            color=COLOR_SECONDARY
                         )
-                    except:
-                        pass
+                    )
+                except (discord.Forbidden, discord.HTTPException):
+                    pass
 
-            # Abuse detection (too many actions too fast)
+            # Abuse detection (rapid actions)
             if last and now - last < timedelta(minutes=2) and today >= 10:
-                guild = self.bot.guilds[0]
-                owner = guild.owner
-                if owner:
-                    try:
-                        await owner.send(
-                            embed=luxury_embed(
-                                title="⚠️ Staff Action Alert",
-                                description=(
-                                    f"<@{staff_id}> has performed many moderation actions rapidly.\n\n"
-                                    "This is **not an accusation**, just a safety signal."
-                                ),
-                                color=COLOR_DANGER
+                for guild in self.bot.guilds:
+                    owner = guild.owner
+                    if owner:
+                        try:
+                            await owner.send(
+                                embed=luxury_embed(
+                                    title="⚠️ Staff Action Alert",
+                                    description=(
+                                        f"<@{staff_id}> has performed many moderation actions rapidly.\n\n"
+                                        "This is a **safety signal**, not an accusation."
+                                    ),
+                                    color=COLOR_DANGER
+                                )
                             )
-                        )
-                    except:
-                        pass
+                        except (discord.Forbidden, discord.HTTPException):
+                            pass
 
-        # Reset daily counters every loop after midnight UTC
+        # Daily reset
         for stats in state.STAFF_STATS.values():
             if stats.get("last_action") and stats["last_action"].date() != now.date():
                 stats["today"] = 0
