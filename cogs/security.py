@@ -22,9 +22,9 @@ SCAM_KEYWORDS = [
 
 
 class Security(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.join_tracker = []
+        self.join_tracker: list[datetime] = []
 
     async def cog_load(self):
         self.raid_watcher.start()
@@ -38,6 +38,7 @@ class Security(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
+        # NEVER interfere with DMs or bots
         if not message.guild or message.author.bot:
             return
 
@@ -51,7 +52,7 @@ class Security(commands.Cog):
                     message.author,
                     "Posting Discord invite links is not permitted."
                 )
-                return
+                return  # safe to stop here
 
         # ---------- SCAM DETECTION ----------
         if any(keyword in content for keyword in SCAM_KEYWORDS):
@@ -98,7 +99,7 @@ class Security(commands.Cog):
                     description=(
                         f"{reason}\n\n"
                         "This is an automated safety reminder.\n"
-                        "No action is required if behavior is corrected."
+                        "No further action will be taken if behavior is corrected."
                     ),
                     color=COLOR_SECONDARY
                 )
@@ -107,27 +108,20 @@ class Security(commands.Cog):
             pass
 
     async def apply_slow_action(self, channel: discord.TextChannel):
-        if not channel.guild.me.guild_permissions.manage_channels:
+        guild = channel.guild
+        me = guild.me
+
+        if not me or not me.guild_permissions.manage_channels:
             return
 
-        # Prevent repeated slowmode spam
+        # Prevent slowmode spam loop
         if channel.slowmode_delay >= 5:
             return
 
         try:
             await channel.edit(slowmode_delay=5)
-            await channel.send(
-                embed=luxury_embed(
-                    title="🐢 Slowmode Enabled",
-                    description=(
-                        "High message frequency detected.\n\n"
-                        "Slowmode has been enabled temporarily to maintain calm discussion."
-                    ),
-                    color=COLOR_SECONDARY
-                )
-            )
         except (discord.Forbidden, discord.HTTPException):
-            pass
+            return
 
     # =====================================
     # RAID DETECTION (JOIN BURST)
@@ -147,11 +141,12 @@ class Security(commands.Cog):
             await self.handle_possible_raid(member.guild)
 
     async def handle_possible_raid(self, guild: discord.Guild):
-        system_cog = self.bot.get_cog("System")
-        if system_cog and getattr(system_cog, "panic_mode", False):
+        # Respect panic mode
+        if state.SYSTEM_FLAGS.get("panic_mode"):
             return
 
-        if not guild.me.guild_permissions.manage_channels:
+        me = guild.me
+        if not me or not me.guild_permissions.manage_channels:
             return
 
         for channel in guild.text_channels:
@@ -169,7 +164,7 @@ class Security(commands.Cog):
                         title="🚨 Possible Raid Detected",
                         description=(
                             "Multiple users joined within a short time window.\n\n"
-                            "Preventive slowmode has been automatically enabled."
+                            "Preventive slowmode has been enabled automatically."
                         ),
                         color=COLOR_DANGER
                     )
@@ -190,5 +185,5 @@ class Security(commands.Cog):
         await self.bot.wait_until_ready()
 
 
-async def setup(bot):
+async def setup(bot: commands.Bot):
     await bot.add_cog(Security(bot))
