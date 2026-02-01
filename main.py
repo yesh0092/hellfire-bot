@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from utils import state
 
 # =====================================================
-# LOGGING (SAFE FOR PRODUCTION)
+# LOGGING
 # =====================================================
 
 logging.basicConfig(
@@ -33,7 +33,7 @@ if not TOKEN:
     raise RuntimeError("❌ TOKEN missing in environment")
 
 # =====================================================
-# INTENTS
+# INTENTS (FULL & CORRECT)
 # =====================================================
 
 intents = discord.Intents.default()
@@ -41,6 +41,7 @@ intents.guilds = True
 intents.members = True
 intents.message_content = True
 intents.moderation = True
+intents.voice_states = True   # 🔥 REQUIRED FOR VC SYSTEM
 
 # =====================================================
 # BOT
@@ -59,15 +60,17 @@ bot = commands.Bot(
 @bot.check
 async def block_commands_in_dm(ctx: commands.Context) -> bool:
     """
-    HARD BLOCK: Commands must NEVER run in DMs
+    HARD BLOCK: commands never execute in DMs
     """
     if ctx.guild is None:
         try:
             await ctx.send(
                 embed=discord.Embed(
                     title="🚫 Commands Disabled in DMs",
-                    description="**HellFire Hangout Support**\n\n"
-                                "Commands can only be used inside the server.",
+                    description=(
+                        "**HellFire Hangout Support**\n\n"
+                        "Commands can only be used inside the server."
+                    ),
                     color=0x7c2d12
                 ),
                 delete_after=5
@@ -81,8 +84,11 @@ async def block_commands_in_dm(ctx: commands.Context) -> bool:
 @bot.check
 async def staff_permission_guard(ctx: commands.Context) -> bool:
     """
-    Staff level + admin override system
+    Staff level enforcement with admin & owner override
     """
+    if not ctx.command:
+        return True
+
     if await bot.is_owner(ctx.author):
         return True
 
@@ -93,9 +99,13 @@ async def staff_permission_guard(ctx: commands.Context) -> bool:
     if required is None:
         return True
 
+    highest_level = 0
     for level, role_id in state.STAFF_ROLE_TIERS.items():
         if role_id and any(role.id == role_id for role in ctx.author.roles):
-            return level >= required
+            highest_level = max(highest_level, level)
+
+    if highest_level >= required:
+        return True
 
     await ctx.send(
         embed=discord.Embed(
@@ -117,19 +127,16 @@ async def on_command_error(ctx, error):
         return
     if isinstance(error, commands.CommandNotFound):
         return
-
     if isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send("⚠️ Missing required arguments.")
+        await ctx.send("⚠️ Missing required arguments.", delete_after=5)
         return
-
     if isinstance(error, commands.BadArgument):
-        await ctx.send("⚠️ Invalid argument provided.")
+        await ctx.send("⚠️ Invalid argument provided.", delete_after=5)
         return
-
     raise error
 
 # =====================================================
-# MESSAGE HANDLER (ANTI DOUBLE EXECUTION)
+# MESSAGE HANDLER (CRITICAL FIX)
 # =====================================================
 
 @bot.event
@@ -137,10 +144,7 @@ async def on_message(message: discord.Message):
     if message.author.bot:
         return
 
-    # DM messages are handled ONLY by onboarding/support cogs
-    if isinstance(message.channel, discord.DMChannel):
-        return
-
+    # 🔑 Allow DMs to reach onboarding/support cogs
     await bot.process_commands(message)
 
 # =====================================================
