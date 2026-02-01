@@ -3,134 +3,81 @@ from discord.ext import commands
 from datetime import datetime
 
 from utils.embeds import luxury_embed
-from utils.config import COLOR_SECONDARY, COLOR_DANGER, COLOR_GOLD
-from utils.permissions import require_level
 from utils import state
+from utils.config import COLOR_SECONDARY, COLOR_DANGER
 
 
 class BotLog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    # =====================================================
-    # INTERNAL LOGGER (SAFE)
-    # =====================================================
+    # =================================================
+    # INTERNAL HELPER
+    # =================================================
 
-    async def log(self, title: str, description: str, color=COLOR_SECONDARY):
-        if not state.BOT_LOG_CHANNEL_ID or not state.MAIN_GUILD_ID:
-            return
+    def get_log_channel(self, guild: discord.Guild):
+        if not state.BOT_LOG_CHANNEL_ID:
+            return None
+        return guild.get_channel(state.BOT_LOG_CHANNEL_ID)
 
-        guild = self.bot.get_guild(state.MAIN_GUILD_ID)
-        if not guild:
-            return
-
-        channel = guild.get_channel(state.BOT_LOG_CHANNEL_ID)
-        if not channel:
-            return
-
-        try:
-            await channel.send(
-                embed=luxury_embed(
-                    title=title,
-                    description=description,
-                    color=color
-                )
-            )
-        except (discord.Forbidden, discord.HTTPException):
-            pass
-
-    # =====================================================
-    # EVENTS
-    # =====================================================
+    # =================================================
+    # BOT READY LOG
+    # =================================================
 
     @commands.Cog.listener()
     async def on_ready(self):
-        if not self.bot.user:
-            return
+        print("📜 BotLog system active")
 
-        await self.log(
-            "🤖 Bot Online",
-            (
-                f"**{self.bot.user}** is now online.\n\n"
-                f"🧠 **Loaded Cogs:** `{len(self.bot.cogs)}`\n"
-                f"⏱ **Timestamp:** `{datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}`"
-            ),
-            COLOR_GOLD
-        )
+    # =================================================
+    # COMMAND USAGE LOG
+    # =================================================
 
     @commands.Cog.listener()
-    async def on_command_error(self, ctx, error):
-        # Ignore permission-related failures silently
-        if isinstance(error, commands.CheckFailure):
+    async def on_command_completion(self, ctx: commands.Context):
+        if not ctx.guild:
             return
 
-        command_name = ctx.command.qualified_name if ctx.command else "Unknown"
+        channel = self.get_log_channel(ctx.guild)
+        if not channel:
+            return
 
-        await self.log(
-            "❌ Command Error",
-            (
-                f"**Command:** `{command_name}`\n"
-                f"**User:** {ctx.author} (`{ctx.author.id}`)\n"
-                f"**Channel:** {ctx.channel.mention}\n"
-                f"**Error:** `{error}`"
-            ),
-            COLOR_DANGER
-        )
-
-    # =====================================================
-    # ADMIN COMMANDS (STAFF+++)
-    # =====================================================
-
-    @commands.command()
-    @commands.guild_only()
-    @require_level(4)  # Staff+++
-    async def setbotlog(self, ctx: commands.Context):
-        state.BOT_LOG_CHANNEL_ID = ctx.channel.id
-        state.MAIN_GUILD_ID = ctx.guild.id
-
-        await ctx.send(
+        await channel.send(
             embed=luxury_embed(
-                title="📜 Bot Log Channel Configured",
+                title="📘 Command Executed",
                 description=(
-                    "This channel will now receive:\n"
-                    "• System lifecycle events\n"
-                    "• Command execution errors\n"
-                    "• Security and audit alerts\n"
-                    "• Internal bot notifications"
+                    f"👤 **User:** {ctx.author} (`{ctx.author.id}`)\n"
+                    f"🧾 **Command:** `{ctx.command.qualified_name}`\n"
+                    f"📍 **Channel:** {ctx.channel.mention}"
                 ),
-                color=COLOR_GOLD
+                color=COLOR_SECONDARY
             )
         )
 
-        await self.log(
-            "📜 Bot Logging Enabled",
-            f"Logging channel configured by {ctx.author.mention}.",
-            COLOR_GOLD
-        )
+    # =================================================
+    # COMMAND ERROR LOG
+    # =================================================
 
-    @commands.command()
-    @commands.guild_only()
-    @require_level(4)  # Staff+++
-    async def unsetbotlog(self, ctx: commands.Context):
-        if not state.BOT_LOG_CHANNEL_ID:
-            return await ctx.send(
-                embed=luxury_embed(
-                    title="ℹ️ Bot Logging Already Disabled",
-                    description="There is currently **no bot log channel** configured.",
-                    color=COLOR_SECONDARY
-                )
-            )
+    @commands.Cog.listener()
+    async def on_command_error(self, ctx: commands.Context, error):
+        if not ctx.guild:
+            return
 
-        state.BOT_LOG_CHANNEL_ID = None
+        channel = self.get_log_channel(ctx.guild)
+        if not channel:
+            return
 
-        await ctx.send(
+        await channel.send(
             embed=luxury_embed(
-                title="❌ Bot Logging Disabled",
-                description="System, error, and security logs will no longer be sent.",
+                title="⚠️ Command Error",
+                description=(
+                    f"👤 **User:** {ctx.author}\n"
+                    f"🧾 **Command:** `{ctx.command}`\n"
+                    f"❌ **Error:** `{type(error).__name__}`"
+                ),
                 color=COLOR_DANGER
             )
         )
 
 
-async def setup(bot):
+async def setup(bot: commands.Bot):
     await bot.add_cog(BotLog(bot))
