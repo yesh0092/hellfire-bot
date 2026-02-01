@@ -7,28 +7,34 @@ from dotenv import load_dotenv
 
 from utils import state
 
-# ================= LOGGING =================
+# =====================================================
+# LOGGING (SAFE FOR PRODUCTION)
+# =====================================================
 
 logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s:%(levelname)s:%(name)s: %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
 )
 
-logging.getLogger("discord").setLevel(logging.DEBUG)
-logging.getLogger("discord.http").setLevel(logging.DEBUG)
-logging.getLogger("discord.gateway").setLevel(logging.DEBUG)
+logging.getLogger("discord").setLevel(logging.WARNING)
+logging.getLogger("discord.http").setLevel(logging.WARNING)
+logging.getLogger("discord.gateway").setLevel(logging.WARNING)
 
 print(">>> PYTHON PROCESS STARTED <<<")
 
-# ================= ENV =================
+# =====================================================
+# ENV
+# =====================================================
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 
 if not TOKEN:
-    raise RuntimeError("TOKEN missing")
+    raise RuntimeError("❌ TOKEN missing in environment")
 
-# ================= INTENTS =================
+# =====================================================
+# INTENTS
+# =====================================================
 
 intents = discord.Intents.default()
 intents.guilds = True
@@ -36,26 +42,158 @@ intents.members = True
 intents.message_content = True
 intents.moderation = True
 
-# ================= BOT =================
+# =====================================================
+# BOT
+# =====================================================
 
 bot = commands.Bot(
-    command_prefix="!",
+    command_prefix="&",
     intents=intents,
     help_command=None
 )
 
+# =====================================================
+# GLOBAL COMMAND GUARDS
+# =====================================================
+
+@bot.check
+async def block_commands_in_dm(ctx: commands.Context) -> bool:
+    """
+    HARD BLOCK: Commands must NEVER run in DMs
+    """
+    if ctx.guild is None:
+        try:
+            await ctx.send(
+                embed=discord.Embed(
+                    title="🚫 Commands Disabled in DMs",
+                    description="**HellFire Hangout Support**\n\n"
+                                "Commands can only be used inside the server.",
+                    color=0x7c2d12
+                ),
+                delete_after=5
+            )
+        except discord.Forbidden:
+            pass
+        return False
+    return True
+
+
+@bot.check
+async def staff_permission_guard(ctx: commands.Context) -> bool:
+    """
+    Staff level + admin override system
+    """
+    if await bot.is_owner(ctx.author):
+        return True
+
+    if ctx.author.guild_permissions.administrator:
+        return True
+
+    required = getattr(ctx.command.callback, "required_level", None)
+    if required is None:
+        return True
+
+    for level, role_id in state.STAFF_ROLE_TIERS.items():
+        if role_id and any(role.id == role_id for role in ctx.author.roles):
+            return level >= required
+
+    await ctx.send(
+        embed=discord.Embed(
+            title="❌ Permission Denied",
+            description="Your staff level is too low for this command.",
+            color=0x7c2d12
+        ),
+        delete_after=5
+    )
+    return False
+
+# =====================================================
+# ERROR HANDLER
+# =====================================================
+
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CheckFailure):
+        return
+    if isinstance(error, commands.CommandNotFound):
+        return
+
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send("⚠️ Missing required arguments.")
+        return
+
+    if isinstance(error, commands.BadArgument):
+        await ctx.send("⚠️ Invalid argument provided.")
+        return
+
+    raise error
+
+# =====================================================
+# MESSAGE HANDLER (ANTI DOUBLE EXECUTION)
+# =====================================================
+
+@bot.event
+async def on_message(message: discord.Message):
+    if message.author.bot:
+        return
+
+    # DM messages are handled ONLY by onboarding/support cogs
+    if isinstance(message.channel, discord.DMChannel):
+        return
+
+    await bot.process_commands(message)
+
+# =====================================================
+# COG LOADER
+# =====================================================
+
+COGS = [
+    "cogs.admin",
+    "cogs.system",
+    "cogs.moderation",
+    "cogs.warn_system",
+    "cogs.staff",
+    "cogs.security",
+    "cogs.support",
+    "cogs.audit",
+    "cogs.announce",
+    "cogs.voice_system",
+    "cogs.onboarding",
+]
+
+async def load_cogs():
+    for cog in COGS:
+        try:
+            await bot.load_extension(cog)
+            print(f"✅ Loaded {cog}")
+        except Exception as e:
+            print(f"❌ Failed to load {cog}: {e}")
+
+# =====================================================
+# EVENTS
+# =====================================================
+
 @bot.event
 async def setup_hook():
     print(">>> SETUP_HOOK FIRED <<<")
+    await load_cogs()
 
 @bot.event
 async def on_ready():
     print(">>> ON_READY FIRED <<<")
+    print(f"🟢 Logged in as: {bot.user}")
+    print(f"📦 Loaded cogs: {len(bot.cogs)}")
+    print("🛡️ Commands locked to server only")
+    print("⚙️ Prefix set to &")
 
-# ================= MAIN =================
+# =====================================================
+# MAIN
+# =====================================================
 
 async def main():
     print(">>> BOT STARTING LOGIN SEQUENCE <<<")
-    await bot.start(TOKEN)
+    async with bot:
+        await bot.start(TOKEN)
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
