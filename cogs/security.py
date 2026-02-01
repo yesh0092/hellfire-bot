@@ -4,7 +4,7 @@ from discord.ext import commands, tasks
 from datetime import datetime, timedelta
 
 from utils.embeds import luxury_embed
-from utils.config import COLOR_DANGER, COLOR_SECONDARY, COLOR_GOLD
+from utils.config import COLOR_DANGER, COLOR_SECONDARY
 from utils import state
 
 
@@ -25,6 +25,8 @@ class Security(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.join_tracker = []
+
+    async def cog_load(self):
         self.raid_watcher.start()
 
     def cog_unload(self):
@@ -35,7 +37,7 @@ class Security(commands.Cog):
     # =====================================
 
     @commands.Cog.listener()
-    async def on_message(self, message):
+    async def on_message(self, message: discord.Message):
         if not message.guild or message.author.bot:
             return
 
@@ -44,7 +46,7 @@ class Security(commands.Cog):
         # ---------- INVITE FILTER ----------
         if INVITE_REGEX.search(content):
             if not message.author.guild_permissions.manage_messages:
-                await message.delete()
+                await self._safe_delete(message)
                 await self.soft_warn(
                     message.author,
                     "Posting Discord invite links is not permitted."
@@ -54,10 +56,10 @@ class Security(commands.Cog):
         # ---------- SCAM DETECTION ----------
         if any(keyword in content for keyword in SCAM_KEYWORDS):
             if not message.author.guild_permissions.manage_messages:
-                await message.delete()
+                await self._safe_delete(message)
                 await self.soft_warn(
                     message.author,
-                    "Potential scam message detected. Please avoid misleading content."
+                    "Potential scam content detected. Please avoid misleading messages."
                 )
                 return
 
@@ -66,16 +68,26 @@ class Security(commands.Cog):
         history = state.MESSAGE_HISTORY.setdefault(message.author.id, [])
         history.append(now)
 
-        # Keep last 10 seconds only
+        # Keep only last 10 seconds
         state.MESSAGE_HISTORY[message.author.id] = [
             t for t in history if now - t < timedelta(seconds=10)
         ]
 
         if len(state.MESSAGE_HISTORY[message.author.id]) >= 6:
-            await self.apply_slow_action(message.author, message.channel)
+            await self.apply_slow_action(message.channel)
 
     # =====================================
-    # SOFT ACTIONS (CALM, LUXURY)
+    # SAFE UTILITIES
+    # =====================================
+
+    async def _safe_delete(self, message: discord.Message):
+        try:
+            await message.delete()
+        except (discord.Forbidden, discord.NotFound):
+            pass
+
+    # =====================================
+    # SOFT ACTIONS (NON-PUNITIVE)
     # =====================================
 
     async def soft_warn(self, member: discord.Member, reason: str):
@@ -85,16 +97,23 @@ class Security(commands.Cog):
                     title="⚠️ Security Notice",
                     description=(
                         f"{reason}\n\n"
-                        "This is an automated safety reminder. "
-                        "No action is required if behavior is adjusted."
+                        "This is an automated safety reminder.\n"
+                        "No action is required if behavior is corrected."
                     ),
                     color=COLOR_SECONDARY
                 )
             )
-        except:
+        except (discord.Forbidden, discord.HTTPException):
             pass
 
-    async def apply_slow_action(self, member: discord.Member, channel: discord.TextChannel):
+    async def apply_slow_action(self, channel: discord.TextChannel):
+        if not channel.guild.me.guild_permissions.manage_channels:
+            return
+
+        # Prevent repeated slowmode spam
+        if channel.slowmode_delay >= 5:
+            return
+
         try:
             await channel.edit(slowmode_delay=5)
             await channel.send(
@@ -102,12 +121,12 @@ class Security(commands.Cog):
                     title="🐢 Slowmode Enabled",
                     description=(
                         "High message frequency detected.\n\n"
-                        "Slowmode has been temporarily enabled to maintain calm discussion."
+                        "Slowmode has been enabled temporarily to maintain calm discussion."
                     ),
                     color=COLOR_SECONDARY
                 )
             )
-        except:
+        except (discord.Forbidden, discord.HTTPException):
             pass
 
     # =====================================
@@ -115,7 +134,7 @@ class Security(commands.Cog):
     # =====================================
 
     @commands.Cog.listener()
-    async def on_member_join(self, member):
+    async def on_member_join(self, member: discord.Member):
         now = datetime.utcnow()
         self.join_tracker.append(now)
 
@@ -128,34 +147,34 @@ class Security(commands.Cog):
             await self.handle_possible_raid(member.guild)
 
     async def handle_possible_raid(self, guild: discord.Guild):
-        try:
-            system_cog = self.bot.get_cog("System")
-            panic_active = system_cog.panic_mode if system_cog else False
+        system_cog = self.bot.get_cog("System")
+        if system_cog and getattr(system_cog, "panic_mode", False):
+            return
 
-            if panic_active:
-                return
+        if not guild.me.guild_permissions.manage_channels:
+            return
 
-            # Enable slowmode across text channels
-            for channel in guild.text_channels:
-                try:
+        for channel in guild.text_channels:
+            try:
+                if channel.slowmode_delay < 10:
                     await channel.edit(slowmode_delay=10)
-                except:
-                    pass
+            except (discord.Forbidden, discord.HTTPException):
+                continue
 
-            # Alert owner silently
+        # Silent owner alert
+        try:
             if guild.owner:
                 await guild.owner.send(
                     embed=luxury_embed(
                         title="🚨 Possible Raid Detected",
                         description=(
                             "Multiple users joined within a short time window.\n\n"
-                            "Preventive slowmode has been enabled automatically."
+                            "Preventive slowmode has been automatically enabled."
                         ),
                         color=COLOR_DANGER
                     )
                 )
-
-        except:
+        except (discord.Forbidden, discord.HTTPException):
             pass
 
     # =====================================
@@ -164,9 +183,6 @@ class Security(commands.Cog):
 
     @tasks.loop(minutes=5)
     async def raid_watcher(self):
-        """
-        Clears stale join data periodically.
-        """
         self.join_tracker.clear()
 
     @raid_watcher.before_loop
