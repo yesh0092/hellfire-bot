@@ -1,19 +1,23 @@
 """
 =================================================
-Hellfire Hangout — Global Runtime State
+HellFire Hangout — Global Runtime State
 =================================================
 
 ⚠️ IMPORTANT:
 • In-memory only (resets on restart)
 • Safe for Railway / free hosting
-• No logic, no secrets, no side effects
+• NO logic, NO side effects
+• NO async, NO functions
+• Single source of runtime truth
 • Can be swapped with DB later
 
+DO NOT put code here.
 =================================================
 """
 
 from typing import Dict, List, Set, Optional
 from datetime import datetime
+
 
 # =================================================
 # 🧾 MODERATION — WARN SYSTEM
@@ -33,6 +37,7 @@ WARN_LOGS[user_id] = [
     }
 ]
 """
+
 
 # =================================================
 # 🛎️ SUPPORT — TICKET SYSTEM
@@ -56,6 +61,7 @@ TICKET_META[channel_id] = {
     "panel_id": message_id
 }
 """
+
 
 # =================================================
 # 🧠 STAFF — INTELLIGENCE & SAFETY
@@ -83,12 +89,14 @@ STAFF_NOTES[user_id] = [
 ]
 """
 
+
 # =================================================
 # 🛡️ SECURITY — ANTI-SPAM / RAID
 # =================================================
 
 # user_id -> list of message timestamps
 MESSAGE_HISTORY: Dict[int, List[datetime]] = {}
+
 
 # =================================================
 # 🌌 ONBOARDING — JOIN FLOW
@@ -97,11 +105,12 @@ MESSAGE_HISTORY: Dict[int, List[datetime]] = {}
 # user_id -> onboarding message_id
 ONBOARDING_MESSAGES: Dict[int, int] = {}
 
+
 # =================================================
-# ⚙️ GUILD CONFIGURATION
+# ⚙️ GUILD CONFIGURATION (RUNTIME)
 # =================================================
 
-# Main guild ID
+# Main guild ID (set during setup)
 MAIN_GUILD_ID: Optional[int] = None
 
 # Channel IDs
@@ -112,17 +121,19 @@ BOT_LOG_CHANNEL_ID: Optional[int] = None
 # Role IDs
 AUTO_ROLE_ID: Optional[int] = None
 
+
 # =================================================
 # 👮 STAFF ROLE SYSTEM
 # =================================================
 
-# Role tiers (set by !setup or admin commands)
+# Role tiers (populated by admin setup)
 STAFF_ROLE_TIERS: Dict[int, Optional[int]] = {
     1: None,  # Staff
     2: None,  # Staff+
     3: None,  # Staff++
     4: None,  # Staff+++
 }
+
 
 # =================================================
 # 🚨 SYSTEM FLAGS
@@ -131,6 +142,7 @@ STAFF_ROLE_TIERS: Dict[int, Optional[int]] = {
 SYSTEM_FLAGS: Dict[str, bool] = {
     "panic_mode": False,
 }
+
 
 # =================================================
 # 🔊 VOICE SYSTEM
@@ -143,7 +155,10 @@ VOICE_CHANNEL_ID: Optional[int] = None
 VOICE_STAY_ENABLED: bool = False
 
 
-# user_id -> last DM support panel timestamp
-DM_SUPPORT_COOLDOWN = {}
+# =================================================
+# 💬 DM SUPPORT CONTROL
+# =================================================
 
-
+# user_id -> last DM support interaction time
+# (used to prevent DM spam / duplicate panels)
+DM_SUPPORT_COOLDOWN: Dict[int, datetime] = {}
