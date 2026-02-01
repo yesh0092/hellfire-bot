@@ -16,8 +16,9 @@ class Admin(commands.Cog):
     # =================================================
 
     @commands.command()
+    @commands.guild_only()
     @require_level(4)  # Staff+++
-    async def setup(self, ctx):
+    async def setup(self, ctx: commands.Context):
         guild = ctx.guild
         state.MAIN_GUILD_ID = guild.id
 
@@ -28,30 +29,40 @@ class Admin(commands.Cog):
             4: "Staff+++",
         }
 
-        created = []
+        created_roles = []
 
         for level, name in role_map.items():
             role = discord.utils.get(guild.roles, name=name)
+
             if not role:
+                if not guild.me.guild_permissions.manage_roles:
+                    return await ctx.send(
+                        embed=luxury_embed(
+                            title="❌ Missing Permissions",
+                            description="I need **Manage Roles** permission to complete setup.",
+                            color=COLOR_DANGER
+                        )
+                    )
+
                 role = await guild.create_role(
                     name=name,
-                    reason="Hellfire Bot Auto Setup"
+                    reason="HellFire Hangout • Staff System Setup"
                 )
-                created.append(name)
+                created_roles.append(name)
 
             state.STAFF_ROLE_TIERS[level] = role.id
 
         await ctx.send(
             embed=luxury_embed(
-                title="⚙️ Setup Complete",
+                title="⚙️ Staff System Setup Complete",
                 description=(
-                    "Staff role hierarchy is now active.\n\n"
+                    "The **staff role hierarchy** is now active.\n\n"
                     "**Authority Levels:**\n"
-                    "• **Staff** → Warn & tickets\n"
+                    "• **Staff** → Warnings & tickets\n"
                     "• **Staff+** → Timeouts\n"
-                    "• **Staff++** → Kick\n"
-                    "• **Staff+++** → Ban & full config\n\n"
-                    f"{'🆕 Created Roles: ' + ', '.join(created) if created else 'All roles already existed.'}"
+                    "• **Staff++** → Kicks\n"
+                    "• **Staff+++** → Bans & full configuration\n\n"
+                    f"{'🆕 **Created Roles:** ' + ', '.join(created_roles) if created_roles else '✅ All required roles already existed.'}"
                 ),
                 color=COLOR_GOLD
             )
@@ -62,27 +73,29 @@ class Admin(commands.Cog):
     # =================================================
 
     @commands.command()
+    @commands.guild_only()
     @require_level(4)
-    async def welcome(self, ctx):
+    async def welcome(self, ctx: commands.Context):
         state.WELCOME_CHANNEL_ID = ctx.channel.id
         state.MAIN_GUILD_ID = ctx.guild.id
 
         await ctx.send(
             embed=luxury_embed(
-                title="👋 Welcome Channel Set",
-                description="This channel is now the **official welcome channel**.",
+                title="👋 Welcome Channel Configured",
+                description="This channel is now set as the **official welcome channel**.",
                 color=COLOR_GOLD
             )
         )
 
     @commands.command()
+    @commands.guild_only()
     @require_level(4)
-    async def unwelcome(self, ctx):
+    async def unwelcome(self, ctx: commands.Context):
         if not state.WELCOME_CHANNEL_ID:
             return await ctx.send(
                 embed=luxury_embed(
-                    title="ℹ️ Nothing to Remove",
-                    description="No welcome channel is currently set.",
+                    title="ℹ️ No Welcome Channel Set",
+                    description="There is currently **no welcome channel** configured.",
                     color=COLOR_SECONDARY
                 )
             )
@@ -91,8 +104,8 @@ class Admin(commands.Cog):
 
         await ctx.send(
             embed=luxury_embed(
-                title="❌ Welcome Channel Removed",
-                description="Welcome messages have been **disabled**.",
+                title="❌ Welcome Channel Disabled",
+                description="Automatic welcome messages have been **successfully disabled**.",
                 color=COLOR_DANGER
             )
         )
@@ -102,27 +115,29 @@ class Admin(commands.Cog):
     # =================================================
 
     @commands.command()
+    @commands.guild_only()
     @require_level(4)
-    async def supportlog(self, ctx):
+    async def supportlog(self, ctx: commands.Context):
         state.SUPPORT_LOG_CHANNEL_ID = ctx.channel.id
         state.MAIN_GUILD_ID = ctx.guild.id
 
         await ctx.send(
             embed=luxury_embed(
-                title="📊 Support Log Enabled",
-                description="This channel will now receive **support ticket logs**.",
+                title="📊 Support Logging Enabled",
+                description="This channel will now receive **support ticket activity logs**.",
                 color=COLOR_GOLD
             )
         )
 
     @commands.command()
+    @commands.guild_only()
     @require_level(4)
-    async def unsupportlog(self, ctx):
+    async def unsupportlog(self, ctx: commands.Context):
         if not state.SUPPORT_LOG_CHANNEL_ID:
             return await ctx.send(
                 embed=luxury_embed(
-                    title="ℹ️ Nothing to Remove",
-                    description="Support logging is already disabled.",
+                    title="ℹ️ Support Logging Already Disabled",
+                    description="There is currently **no support log channel** set.",
                     color=COLOR_SECONDARY
                 )
             )
@@ -132,7 +147,7 @@ class Admin(commands.Cog):
         await ctx.send(
             embed=luxury_embed(
                 title="❌ Support Logging Disabled",
-                description="Support ticket logs will no longer be recorded.",
+                description="Support ticket logs will **no longer be recorded**.",
                 color=COLOR_DANGER
             )
         )
@@ -142,27 +157,29 @@ class Admin(commands.Cog):
     # =================================================
 
     @commands.command()
+    @commands.guild_only()
     @require_level(4)
-    async def autorole(self, ctx, role: discord.Role):
+    async def autorole(self, ctx: commands.Context, role: discord.Role):
         state.AUTO_ROLE_ID = role.id
         state.MAIN_GUILD_ID = ctx.guild.id
 
         await ctx.send(
             embed=luxury_embed(
                 title="🏅 Autorole Enabled",
-                description=f"New members will automatically receive **{role.name}**.",
+                description=f"New members will now automatically receive **{role.mention}**.",
                 color=COLOR_GOLD
             )
         )
 
     @commands.command()
+    @commands.guild_only()
     @require_level(4)
-    async def unautorole(self, ctx):
+    async def unautorole(self, ctx: commands.Context):
         if not state.AUTO_ROLE_ID:
             return await ctx.send(
                 embed=luxury_embed(
-                    title="ℹ️ Nothing to Remove",
-                    description="Autorole is already disabled.",
+                    title="ℹ️ Autorole Already Disabled",
+                    description="No automatic role is currently configured.",
                     color=COLOR_SECONDARY
                 )
             )
@@ -182,8 +199,9 @@ class Admin(commands.Cog):
     # =================================================
 
     @commands.command()
+    @commands.guild_only()
     @require_level(4)
-    async def config(self, ctx):
+    async def config(self, ctx: commands.Context):
         guild = ctx.guild
 
         welcome = guild.get_channel(state.WELCOME_CHANNEL_ID) if state.WELCOME_CHANNEL_ID else None
@@ -192,12 +210,12 @@ class Admin(commands.Cog):
 
         await ctx.send(
             embed=luxury_embed(
-                title="⚙️ Current Configuration",
+                title="⚙️ HellFire Hangout • Configuration Overview",
                 description=(
                     f"👋 **Welcome Channel:** {welcome.mention if welcome else 'Disabled'}\n"
-                    f"📊 **Support Log:** {supportlog.mention if supportlog else 'Disabled'}\n"
-                    f"🏅 **Autorole:** {autorole.name if autorole else 'Disabled'}\n\n"
-                    "All settings are **reversible** at any time."
+                    f"📊 **Support Log Channel:** {supportlog.mention if supportlog else 'Disabled'}\n"
+                    f"🏅 **Autorole:** {autorole.mention if autorole else 'Disabled'}\n\n"
+                    "All settings can be **updated or reverted at any time**."
                 ),
                 color=COLOR_GOLD
             )
