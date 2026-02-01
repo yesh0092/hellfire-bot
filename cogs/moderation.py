@@ -251,3 +251,24 @@ class Moderation(commands.Cog):
             )
 
         await self._safe_dm(
+            member,
+            luxury_embed(
+                title="⚖️ Permanently Banned",
+                description=f"📄 **Reason:** {reason}",
+                color=COLOR_DANGER
+            )
+        )
+
+        await member.ban(reason=reason)
+
+        await ctx.send(
+            embed=luxury_embed(
+                title="⛔ Member Banned",
+                description=f"👤 {member.mention}",
+                color=COLOR_GOLD
+            )
+        )
+
+
+async def setup(bot: commands.Bot):
+    await bot.add_cog(Moderation(bot))
