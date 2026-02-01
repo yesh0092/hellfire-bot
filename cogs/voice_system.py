@@ -8,23 +8,33 @@ from utils import state
 
 
 class VoiceSystem(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+        # Ensure state defaults exist
+        state.VOICE_STAY_ENABLED = getattr(state, "VOICE_STAY_ENABLED", False)
+        state.VOICE_CHANNEL_ID = getattr(state, "VOICE_CHANNEL_ID", None)
+
+    async def cog_load(self):
+        # Start guard AFTER bot is ready
         self.voice_guard.start()
+
+        # Auto-join on startup
+        await self.bot.wait_until_ready()
+        await self.ensure_voice_connection()
 
     def cog_unload(self):
         self.voice_guard.cancel()
 
     # =====================================================
-    # AUTO REJOIN TASK
+    # CORE VOICE CONNECTOR (RELIABLE)
     # =====================================================
 
-    @tasks.loop(seconds=20)
-    async def voice_guard(self):
+    async def ensure_voice_connection(self):
         if not state.VOICE_STAY_ENABLED:
             return
 
-        if not state.VOICE_CHANNEL_ID:
+        if not state.VOICE_CHANNEL_ID or not state.MAIN_GUILD_ID:
             return
 
         guild = self.bot.get_guild(state.MAIN_GUILD_ID)
@@ -32,65 +42,100 @@ class VoiceSystem(commands.Cog):
             return
 
         channel = guild.get_channel(state.VOICE_CHANNEL_ID)
-        if not channel or not isinstance(channel, discord.VoiceChannel):
+        if not isinstance(channel, discord.VoiceChannel):
+            return
+
+        if not channel.permissions_for(guild.me).connect:
             return
 
         vc = guild.voice_client
 
-        # If not connected → reconnect
-        if not vc or not vc.is_connected():
-            try:
+        try:
+            # Not connected at all
+            if not vc or not vc.is_connected():
                 await channel.connect(self_deaf=True)
-            except discord.HTTPException:
-                pass
+                return
+
+            # Connected to wrong channel
+            if vc.channel.id != channel.id:
+                await vc.disconnect(force=True)
+                await channel.connect(self_deaf=True)
+                return
+
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
+    # =====================================================
+    # AUTO REJOIN TASK (24/7)
+    # =====================================================
+
+    @tasks.loop(seconds=15)
+    async def voice_guard(self):
+        await self.ensure_voice_connection()
+
+    @voice_guard.before_loop
+    async def before_voice_guard(self):
+        await self.bot.wait_until_ready()
 
     # =====================================================
     # SET VOICE CHANNEL
     # =====================================================
 
     @commands.command()
+    @commands.guild_only()
     @require_level(4)  # Staff+++
-    async def setvc(self, ctx, channel: discord.VoiceChannel):
+    async def setvc(self, ctx: commands.Context, channel: discord.VoiceChannel):
+        if not channel.permissions_for(ctx.guild.me).connect:
+            return await ctx.send(
+                embed=luxury_embed(
+                    title="❌ Missing Permissions",
+                    description="I do not have permission to join that voice channel.",
+                    color=COLOR_DANGER
+                )
+            )
+
         state.VOICE_CHANNEL_ID = channel.id
         state.VOICE_STAY_ENABLED = True
         state.MAIN_GUILD_ID = ctx.guild.id
+
+        await self.ensure_voice_connection()
 
         await ctx.send(
             embed=luxury_embed(
                 title="🔊 Voice Presence Enabled",
                 description=(
-                    f"Bot will now stay connected to:\n"
+                    f"The bot will now stay connected to:\n"
                     f"🎧 **{channel.name}**\n\n"
-                    "• Auto-rejoin enabled\n"
-                    "• Silent presence\n"
+                    "• 24/7 Presence\n"
+                    "• Auto-rejoin on disconnect\n"
+                    "• Silent (self-deaf)\n"
                     "• No recording"
                 ),
                 color=COLOR_GOLD
             )
         )
 
-        try:
-            await channel.connect(self_deaf=True)
-        except discord.HTTPException:
-            pass
-
     # =====================================================
     # DISABLE VOICE SYSTEM
     # =====================================================
 
     @commands.command()
+    @commands.guild_only()
     @require_level(4)
-    async def unsetvc(self, ctx):
+    async def unsetvc(self, ctx: commands.Context):
         state.VOICE_STAY_ENABLED = False
 
         vc = ctx.guild.voice_client
         if vc:
-            await vc.disconnect(force=True)
+            try:
+                await vc.disconnect(force=True)
+            except (discord.Forbidden, discord.HTTPException):
+                pass
 
         await ctx.send(
             embed=luxury_embed(
                 title="❌ Voice Presence Disabled",
-                description="Bot will no longer stay in any voice channel.",
+                description="The bot will no longer stay connected to any voice channel.",
                 color=COLOR_DANGER
             )
         )
@@ -100,9 +145,10 @@ class VoiceSystem(commands.Cog):
     # =====================================================
 
     @commands.command()
+    @commands.guild_only()
     @require_level(1)
-    async def vcstatus(self, ctx):
-        if not state.VOICE_CHANNEL_ID or not state.VOICE_STAY_ENABLED:
+    async def vcstatus(self, ctx: commands.Context):
+        if not state.VOICE_STAY_ENABLED or not state.VOICE_CHANNEL_ID:
             return await ctx.send(
                 embed=luxury_embed(
                     title="🔇 Voice System",
@@ -117,9 +163,10 @@ class VoiceSystem(commands.Cog):
             embed=luxury_embed(
                 title="🔊 Voice System Active",
                 description=(
-                    f"🎧 Channel: **{channel.name if channel else 'Unknown'}**\n"
-                    f"🔁 Auto Rejoin: Enabled\n"
-                    f"🔒 Silent Mode: Active"
+                    f"🎧 **Channel:** {channel.name if channel else 'Unknown'}\n"
+                    "🔁 **Auto-Rejoin:** Enabled\n"
+                    "🕒 **Uptime:** 24/7\n"
+                    "🔒 **Silent Mode:** Active"
                 ),
                 color=COLOR_GOLD
             )
