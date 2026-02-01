@@ -13,18 +13,20 @@ class System(commands.Cog):
         self.bot = bot
         self.start_time = datetime.utcnow()
 
-        # Ensure system flags exist
-        state.SYSTEM_FLAGS = getattr(state, "SYSTEM_FLAGS", {})
+        # 🔒 NEVER reassign — only mutate
+        if not hasattr(state, "SYSTEM_FLAGS"):
+            state.SYSTEM_FLAGS = {}
+
         state.SYSTEM_FLAGS.setdefault("panic_mode", False)
 
     # =====================================================
     # HELP (STAFF ONLY)
     # =====================================================
 
-    @commands.command()
+    @commands.command(name="help", help="Show HellFire Hangout command list")
     @commands.guild_only()
     @require_level(1)  # Staff
-    async def help(self, ctx: commands.Context):
+    async def system_help(self, ctx: commands.Context):
         await ctx.send(
             embed=luxury_embed(
                 title="🌙 HellFire Hangout — Command Codex",
@@ -32,51 +34,42 @@ class System(commands.Cog):
                     "**🛎️ SUPPORT (USERS)**\n"
                     "`support` → Open support via DM\n"
                     "• Button-based tickets\n"
-                    "• Auto status & priority\n"
-                    "• Ticket logs & transcripts\n\n"
+                    "• Auto status & priority\n\n"
 
                     "**⚠️ MODERATION (STAFF)**\n"
                     "`!warn @user <reason>`\n"
                     "`!unwarn @user [count]`\n"
                     "`!timeout @user <minutes> <reason>`\n"
                     "`!kick @user <reason>`\n"
-                    "`!ban @user <reason>`\n"
-                    "• Progressive escalation\n"
-                    "• Auto-DM before actions\n\n"
+                    "`!ban @user <reason>`\n\n"
 
                     "**👮 STAFF SYSTEM**\n"
-                    "• Staff / Staff+ / Staff++ / Staff+++\n"
                     "• Role-tier enforcement\n"
                     "• Staff notes & workload tracking\n\n"
 
-                    "**🔊 VOICE PRESENCE SYSTEM**\n"
-                    "`!setvc <voice_channel>` → Enable VC presence (Staff+++)\n"
-                    "`!unsetvc` → Disable VC presence (Staff+++)\n"
-                    "`!vcstatus` → Voice system status (Staff)\n"
-                    "• Auto rejoin on disconnect\n"
-                    "• Silent (self-deaf)\n"
-                    "• No recording\n\n"
+                    "**🔊 VOICE PRESENCE**\n"
+                    "`!setvc <channel>` / `!unsetvc`\n"
+                    "`!vcstatus`\n\n"
 
                     "**🛡️ SECURITY**\n"
                     "• Invite & spam protection\n"
                     "• Raid detection\n"
-                    "• Panic & lockdown mode\n\n"
+                    "• Panic mode\n\n"
 
-                    "**⚙️ ADMIN CONTROLS (STAFF+++)**\n"
+                    "**⚙️ ADMIN (STAFF+++)**\n"
                     "`!setup`\n"
                     "`!welcome` / `!unwelcome`\n"
                     "`!supportlog` / `!unsupportlog`\n"
                     "`!autorole` / `!unautorole`\n\n"
 
                     "**📣 ANNOUNCEMENTS**\n"
-                    "`!announce <message>` → DM broadcast\n\n"
+                    "`!announce <message>`\n\n"
 
                     "**📊 SYSTEM**\n"
                     "`!status`\n"
                     "`!panic` / `!unpanic`\n\n"
 
-                    "_Most systems operate silently to maintain a calm, "
-                    "luxury-grade moderation experience._"
+                    "_Designed for silent, luxury-grade moderation._"
                 ),
                 color=COLOR_GOLD
             )
@@ -88,7 +81,7 @@ class System(commands.Cog):
 
     @commands.command()
     @commands.guild_only()
-    @require_level(1)  # Staff
+    @require_level(1)
     async def status(self, ctx: commands.Context):
         uptime = datetime.utcnow() - self.start_time
         h, r = divmod(int(uptime.total_seconds()), 3600)
@@ -110,12 +103,12 @@ class System(commands.Cog):
         )
 
     # =====================================================
-    # PANIC MODE (STAFF+++)
+    # PANIC MODE
     # =====================================================
 
     @commands.command()
     @commands.guild_only()
-    @require_level(4)  # Staff+++
+    @require_level(4)
     async def panic(self, ctx: commands.Context):
         state.SYSTEM_FLAGS["panic_mode"] = True
 
@@ -124,7 +117,6 @@ class System(commands.Cog):
                 title="🚨 PANIC MODE ENABLED",
                 description=(
                     "High-risk protections are now active.\n\n"
-                    "• Auto lockdown\n"
                     "• Aggressive spam limits\n"
                     "• Elevated moderation sensitivity"
                 ),
@@ -136,14 +128,14 @@ class System(commands.Cog):
 
     @commands.command()
     @commands.guild_only()
-    @require_level(4)  # Staff+++
+    @require_level(4)
     async def unpanic(self, ctx: commands.Context):
         state.SYSTEM_FLAGS["panic_mode"] = False
 
         await ctx.send(
             embed=luxury_embed(
                 title="✅ Panic Mode Disabled",
-                description="All systems have been restored to normal operation.",
+                description="All systems restored to normal operation.",
                 color=COLOR_GOLD
             )
         )
@@ -151,11 +143,11 @@ class System(commands.Cog):
         await self._log(ctx, "✅ Panic mode disabled")
 
     # =====================================================
-    # INTERNAL LOGGER (USED BY OTHER SYSTEM EVENTS)
+    # INTERNAL LOGGER
     # =====================================================
 
     async def _log(self, ctx: commands.Context, message: str):
-        if not state.BOT_LOG_CHANNEL_ID:
+        if not ctx.guild or not state.BOT_LOG_CHANNEL_ID:
             return
 
         channel = ctx.guild.get_channel(state.BOT_LOG_CHANNEL_ID)
@@ -174,5 +166,5 @@ class System(commands.Cog):
             pass
 
 
-async def setup(bot):
+async def setup(bot: commands.Bot):
     await bot.add_cog(System(bot))
