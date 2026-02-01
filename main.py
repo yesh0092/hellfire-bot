@@ -152,6 +152,7 @@ async def on_message(message: discord.Message):
 # =====================================================
 
 COGS = [
+    # Existing cogs
     "cogs.admin",
     "cogs.system",
     "cogs.moderation",
@@ -163,6 +164,12 @@ COGS = [
     "cogs.announce",
     "cogs.voice_system",
     "cogs.onboarding",
+
+    # 🔥 NEW FEATURES (ADDED)
+    "cogs.message_tracker",
+    "cogs.profile",
+    "cogs.weekly_mvp",
+    "cogs.automod",
 ]
 
 async def load_cogs():
