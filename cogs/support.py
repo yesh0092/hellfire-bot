@@ -89,7 +89,7 @@ class SupportView(discord.ui.View):
         state.DM_SUPPORT_SESSIONS.pop(self.user.id, None)
 
     async def on_timeout(self):
-        # Panel expired → allow user to request again
+        # Panel expired → allow new request
         self.clear_session()
 
     # ---------------- CREATE TICKET ----------------
@@ -203,6 +203,7 @@ class Support(commands.Cog):
         self.ticket_watcher.cancel()
 
     # ---------------- DM HANDLER ----------------
+    # ANY MESSAGE IN DM TRIGGERS SUPPORT (ONCE)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -212,19 +213,16 @@ class Support(commands.Cog):
         if not isinstance(message.channel, discord.DMChannel):
             return
 
-        if message.content.lower().strip() != "support":
-            return
-
         user_id = message.author.id
         now = datetime.utcnow()
 
         session = state.DM_SUPPORT_SESSIONS.get(user_id)
 
-        # Existing panel still valid → do nothing
+        # Active panel still valid → ignore
         if session and now - session["created_at"] < DM_PANEL_EXPIRY:
             return
 
-        # Expired panel → delete old message
+        # Expired panel → delete old one
         if session:
             try:
                 old_msg = await message.channel.fetch_message(
@@ -254,7 +252,7 @@ class Support(commands.Cog):
             "created_at": now
         }
 
-    # ---------------- AUTO CLOSE ----------------
+    # ---------------- AUTO CLOSE TICKETS ----------------
 
     @tasks.loop(minutes=10)
     async def ticket_watcher(self):
