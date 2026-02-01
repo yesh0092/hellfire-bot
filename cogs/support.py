@@ -14,7 +14,11 @@ from utils.config import (
 from utils import state
 
 
-DM_PANEL_COOLDOWN = timedelta(minutes=5)
+# =====================================================
+# CONFIG
+# =====================================================
+
+DM_PANEL_EXPIRY = timedelta(minutes=5)
 
 
 # =====================================================
@@ -75,14 +79,18 @@ class SupportView(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user.id:
             await interaction.response.send_message(
-                "❌ This panel is not for you.",
+                "❌ This support panel is not for you.",
                 ephemeral=True
             )
             return False
         return True
 
     def clear_session(self):
-        state.DM_SUPPORT_ACTIVE.pop(self.user.id, None)
+        state.DM_SUPPORT_SESSIONS.pop(self.user.id, None)
+
+    async def on_timeout(self):
+        # Panel expired → allow user to request again
+        self.clear_session()
 
     # ---------------- CREATE TICKET ----------------
 
@@ -105,7 +113,7 @@ class SupportView(discord.ui.View):
             return await interaction.response.send_message(
                 embed=luxury_embed(
                     title="⏳ Ticket Already Open",
-                    description="You already have an active ticket.",
+                    description="You already have an active support ticket.",
                     color=COLOR_SECONDARY
                 ),
                 ephemeral=True
@@ -113,7 +121,10 @@ class SupportView(discord.ui.View):
 
         category = discord.utils.get(guild.categories, name=SUPPORT_CATEGORY_NAME)
         if not category:
-            category = await guild.create_category(SUPPORT_CATEGORY_NAME)
+            try:
+                category = await guild.create_category(SUPPORT_CATEGORY_NAME)
+            except discord.Forbidden:
+                return
 
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
@@ -158,7 +169,7 @@ class SupportView(discord.ui.View):
         await interaction.response.send_message(
             embed=luxury_embed(
                 title="✅ Ticket Created",
-                description="Your support ticket has been opened.",
+                description="Your support ticket has been opened successfully.",
                 color=COLOR_GOLD
             ),
             ephemeral=True
@@ -183,7 +194,7 @@ class SupportView(discord.ui.View):
 class Support(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        state.DM_SUPPORT_ACTIVE = getattr(state, "DM_SUPPORT_ACTIVE", {})
+        state.DM_SUPPORT_SESSIONS = getattr(state, "DM_SUPPORT_SESSIONS", {})
 
     async def cog_load(self):
         self.ticket_watcher.start()
@@ -204,22 +215,44 @@ class Support(commands.Cog):
         if message.content.lower().strip() != "support":
             return
 
+        user_id = message.author.id
         now = datetime.utcnow()
-        last = state.DM_SUPPORT_ACTIVE.get(message.author.id)
 
-        if last and now - last < DM_PANEL_COOLDOWN:
+        session = state.DM_SUPPORT_SESSIONS.get(user_id)
+
+        # Existing panel still valid → do nothing
+        if session and now - session["created_at"] < DM_PANEL_EXPIRY:
             return
 
-        state.DM_SUPPORT_ACTIVE[message.author.id] = now
+        # Expired panel → delete old message
+        if session:
+            try:
+                old_msg = await message.channel.fetch_message(
+                    session["message_id"]
+                )
+                await old_msg.delete()
+            except (discord.NotFound, discord.Forbidden):
+                pass
 
-        await message.channel.send(
+            state.DM_SUPPORT_SESSIONS.pop(user_id, None)
+
+        # Send new panel
+        panel_msg = await message.channel.send(
             embed=luxury_embed(
                 title="🛎️ HellFire Hangout Support",
-                description="Choose how you’d like to proceed.",
+                description=(
+                    "Please choose how you’d like to proceed.\n\n"
+                    "⏳ This panel will expire in **5 minutes**."
+                ),
                 color=COLOR_PRIMARY
             ),
             view=SupportView(message.author)
         )
+
+        state.DM_SUPPORT_SESSIONS[user_id] = {
+            "message_id": panel_msg.id,
+            "created_at": now
+        }
 
     # ---------------- AUTO CLOSE ----------------
 
