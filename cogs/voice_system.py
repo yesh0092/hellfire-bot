@@ -11,23 +11,22 @@ class VoiceSystem(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-        # Ensure state defaults exist
+        # Safe defaults (never overwrite)
         state.VOICE_STAY_ENABLED = getattr(state, "VOICE_STAY_ENABLED", False)
         state.VOICE_CHANNEL_ID = getattr(state, "VOICE_CHANNEL_ID", None)
 
-    async def cog_load(self):
-        # Start guard AFTER bot is ready
-        self.voice_guard.start()
+    # =====================================================
+    # STARTUP
+    # =====================================================
 
-        # Auto-join on startup
-        await self.bot.wait_until_ready()
-        await self.ensure_voice_connection()
+    async def cog_load(self):
+        self.voice_guard.start()
 
     def cog_unload(self):
         self.voice_guard.cancel()
 
     # =====================================================
-    # CORE VOICE CONNECTOR (RELIABLE)
+    # CORE VOICE CONNECTOR (BULLETPROOF)
     # =====================================================
 
     async def ensure_voice_connection(self):
@@ -41,11 +40,15 @@ class VoiceSystem(commands.Cog):
         if not guild:
             return
 
+        bot_member = guild.get_member(self.bot.user.id)
+        if not bot_member:
+            return
+
         channel = guild.get_channel(state.VOICE_CHANNEL_ID)
         if not isinstance(channel, discord.VoiceChannel):
             return
 
-        if not channel.permissions_for(guild.me).connect:
+        if not channel.permissions_for(bot_member).connect:
             return
 
         vc = guild.voice_client
@@ -66,10 +69,10 @@ class VoiceSystem(commands.Cog):
             pass
 
     # =====================================================
-    # AUTO REJOIN TASK (24/7)
+    # AUTO REJOIN LOOP (24/7)
     # =====================================================
 
-    @tasks.loop(seconds=15)
+    @tasks.loop(seconds=20)
     async def voice_guard(self):
         await self.ensure_voice_connection()
 
@@ -83,13 +86,15 @@ class VoiceSystem(commands.Cog):
 
     @commands.command()
     @commands.guild_only()
-    @require_level(4)  # Staff+++
+    @require_level(4)
     async def setvc(self, ctx: commands.Context, channel: discord.VoiceChannel):
-        if not channel.permissions_for(ctx.guild.me).connect:
+        bot_member = ctx.guild.get_member(self.bot.user.id)
+
+        if not bot_member or not channel.permissions_for(bot_member).connect:
             return await ctx.send(
                 embed=luxury_embed(
                     title="❌ Missing Permissions",
-                    description="I do not have permission to join that voice channel.",
+                    description="I cannot connect to that voice channel.",
                     color=COLOR_DANGER
                 )
             )
@@ -104,8 +109,7 @@ class VoiceSystem(commands.Cog):
             embed=luxury_embed(
                 title="🔊 Voice Presence Enabled",
                 description=(
-                    f"The bot will now stay connected to:\n"
-                    f"🎧 **{channel.name}**\n\n"
+                    f"🎧 **Channel:** {channel.name}\n\n"
                     "• 24/7 Presence\n"
                     "• Auto-rejoin on disconnect\n"
                     "• Silent (self-deaf)\n"
@@ -135,7 +139,7 @@ class VoiceSystem(commands.Cog):
         await ctx.send(
             embed=luxury_embed(
                 title="❌ Voice Presence Disabled",
-                description="The bot will no longer stay connected to any voice channel.",
+                description="The bot will no longer stay in voice channels.",
                 color=COLOR_DANGER
             )
         )
@@ -164,14 +168,14 @@ class VoiceSystem(commands.Cog):
                 title="🔊 Voice System Active",
                 description=(
                     f"🎧 **Channel:** {channel.name if channel else 'Unknown'}\n"
-                    "🔁 **Auto-Rejoin:** Enabled\n"
-                    "🕒 **Uptime:** 24/7\n"
-                    "🔒 **Silent Mode:** Active"
+                    "🔁 Auto-rejoin: Enabled\n"
+                    "🕒 Presence: 24/7\n"
+                    "🔒 Silent mode: Active"
                 ),
                 color=COLOR_GOLD
             )
         )
 
 
-async def setup(bot):
+async def setup(bot: commands.Bot):
     await bot.add_cog(VoiceSystem(bot))
