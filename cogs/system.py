@@ -8,12 +8,15 @@ from utils.permissions import require_level
 from utils import state
 
 
+BOT_PREFIX = "&"  # 🔥 SINGLE SOURCE OF TRUTH
+
+
 class System(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.start_time = datetime.utcnow()
 
-        # 🔒 NEVER reassign — only mutate
+        # 🔒 Never reassign, only mutate
         if not hasattr(state, "SYSTEM_FLAGS"):
             state.SYSTEM_FLAGS = {}
 
@@ -23,7 +26,7 @@ class System(commands.Cog):
     # HELP (STAFF ONLY)
     # =====================================================
 
-    @commands.command(name="help", help="Show HellFire Hangout command list")
+    @commands.command(name="help")
     @commands.guild_only()
     @require_level(1)  # Staff
     async def system_help(self, ctx: commands.Context):
@@ -31,25 +34,28 @@ class System(commands.Cog):
             embed=luxury_embed(
                 title="🌙 HellFire Hangout — Command Codex",
                 description=(
+                    f"**🔑 Active Prefix:** `{BOT_PREFIX}`\n\n"
+
                     "**🛎️ SUPPORT (USERS)**\n"
                     "`support` → Open support via DM\n"
                     "• Button-based tickets\n"
                     "• Auto status & priority\n\n"
 
                     "**⚠️ MODERATION (STAFF)**\n"
-                    "`!warn @user <reason>`\n"
-                    "`!unwarn @user [count]`\n"
-                    "`!timeout @user <minutes> <reason>`\n"
-                    "`!kick @user <reason>`\n"
-                    "`!ban @user <reason>`\n\n"
+                    f"`{BOT_PREFIX}warn @user <reason>`\n"
+                    f"`{BOT_PREFIX}unwarn @user [count]`\n"
+                    f"`{BOT_PREFIX}timeout @user <minutes> <reason>`\n"
+                    f"`{BOT_PREFIX}kick @user <reason>`\n"
+                    f"`{BOT_PREFIX}ban @user <reason>`\n\n"
 
                     "**👮 STAFF SYSTEM**\n"
                     "• Role-tier enforcement\n"
                     "• Staff notes & workload tracking\n\n"
 
                     "**🔊 VOICE PRESENCE**\n"
-                    "`!setvc <channel>` / `!unsetvc`\n"
-                    "`!vcstatus`\n\n"
+                    f"`{BOT_PREFIX}setvc <voice_channel>`\n"
+                    f"`{BOT_PREFIX}unsetvc`\n"
+                    f"`{BOT_PREFIX}vcstatus`\n\n"
 
                     "**🛡️ SECURITY**\n"
                     "• Invite & spam protection\n"
@@ -57,17 +63,17 @@ class System(commands.Cog):
                     "• Panic mode\n\n"
 
                     "**⚙️ ADMIN (STAFF+++)**\n"
-                    "`!setup`\n"
-                    "`!welcome` / `!unwelcome`\n"
-                    "`!supportlog` / `!unsupportlog`\n"
-                    "`!autorole` / `!unautorole`\n\n"
+                    f"`{BOT_PREFIX}setup`\n"
+                    f"`{BOT_PREFIX}welcome` / `{BOT_PREFIX}unwelcome`\n"
+                    f"`{BOT_PREFIX}supportlog` / `{BOT_PREFIX}unsupportlog`\n"
+                    f"`{BOT_PREFIX}autorole` / `{BOT_PREFIX}unautorole`\n\n"
 
                     "**📣 ANNOUNCEMENTS**\n"
-                    "`!announce <message>`\n\n"
+                    f"`{BOT_PREFIX}announce <message>`\n\n"
 
                     "**📊 SYSTEM**\n"
-                    "`!status`\n"
-                    "`!panic` / `!unpanic`\n\n"
+                    f"`{BOT_PREFIX}status`\n"
+                    f"`{BOT_PREFIX}panic` / `{BOT_PREFIX}unpanic`\n\n"
 
                     "_Designed for silent, luxury-grade moderation._"
                 ),
@@ -91,7 +97,7 @@ class System(commands.Cog):
             embed=luxury_embed(
                 title="📊 System Status",
                 description=(
-                    f"🟢 **Bot Status:** Online\n"
+                    "🟢 **Bot Status:** Online\n"
                     f"⏱ **Uptime:** {h}h {m}m {s}s\n"
                     f"🚨 **Panic Mode:** {'ON' if state.SYSTEM_FLAGS.get('panic_mode') else 'OFF'}\n"
                     f"🔊 **Voice Presence:** {'ON' if getattr(state, 'VOICE_STAY_ENABLED', False) else 'OFF'}\n"
@@ -103,7 +109,7 @@ class System(commands.Cog):
         )
 
     # =====================================================
-    # PANIC MODE
+    # PANIC MODE (STAFF+++)
     # =====================================================
 
     @commands.command()
