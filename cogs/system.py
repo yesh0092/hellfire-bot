@@ -13,7 +13,7 @@ class System(commands.Cog):
         self.bot = bot
         self.start_time = datetime.utcnow()
 
-        # Ensure flags exist
+        # Ensure system flags exist
         state.SYSTEM_FLAGS = getattr(state, "SYSTEM_FLAGS", {})
         state.SYSTEM_FLAGS.setdefault("panic_mode", False)
 
@@ -66,8 +66,7 @@ class System(commands.Cog):
                     "`!setup`\n"
                     "`!welcome` / `!unwelcome`\n"
                     "`!supportlog` / `!unsupportlog`\n"
-                    "`!autorole` / `!unautorole`\n"
-                    "`!setbotlog` / `!unsetbotlog`\n\n"
+                    "`!autorole` / `!unautorole`\n\n"
 
                     "**📣 ANNOUNCEMENTS**\n"
                     "`!announce <message>` → DM broadcast\n\n"
@@ -152,48 +151,7 @@ class System(commands.Cog):
         await self._log(ctx, "✅ Panic mode disabled")
 
     # =====================================================
-    # BOT LOG CHANNEL (SYSTEM LEVEL)
-    # =====================================================
-
-    @commands.command()
-    @commands.guild_only()
-    @require_level(4)
-    async def setbotlog(self, ctx: commands.Context):
-        state.BOT_LOG_CHANNEL_ID = ctx.channel.id
-
-        await ctx.send(
-            embed=luxury_embed(
-                title="📁 Bot Logging Enabled",
-                description="This channel will now receive **system & security logs**.",
-                color=COLOR_GOLD
-            )
-        )
-
-    @commands.command()
-    @commands.guild_only()
-    @require_level(4)
-    async def unsetbotlog(self, ctx: commands.Context):
-        if not state.BOT_LOG_CHANNEL_ID:
-            return await ctx.send(
-                embed=luxury_embed(
-                    title="ℹ️ Nothing to Remove",
-                    description="Bot logging is already disabled.",
-                    color=COLOR_SECONDARY
-                )
-            )
-
-        state.BOT_LOG_CHANNEL_ID = None
-
-        await ctx.send(
-            embed=luxury_embed(
-                title="❌ Bot Logging Disabled",
-                description="System logs will no longer be sent.",
-                color=COLOR_DANGER
-            )
-        )
-
-    # =====================================================
-    # INTERNAL LOGGER
+    # INTERNAL LOGGER (USED BY OTHER SYSTEM EVENTS)
     # =====================================================
 
     async def _log(self, ctx: commands.Context, message: str):
