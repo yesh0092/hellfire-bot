@@ -8,22 +8,27 @@ from utils.config import COLOR_DANGER, COLOR_SECONDARY
 
 
 class Audit(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    # =====================================
+    # =================================================
+    # INTERNAL PERMISSION CHECK
+    # =================================================
+
+    def can_view_audit_logs(self, guild: discord.Guild) -> bool:
+        bot_member = guild.get_member(self.bot.user.id)
+        return bool(bot_member and bot_member.guild_permissions.view_audit_log)
+
+    # =================================================
     # MANUAL BAN DETECTION
-    # =====================================
+    # =================================================
 
     @commands.Cog.listener()
     async def on_member_ban(self, guild: discord.Guild, user: discord.User):
-        """
-        Detect bans issued manually via Discord UI and notify the user.
-        """
-        if not guild.me.guild_permissions.view_audit_log:
+        if not self.can_view_audit_logs(guild):
             return
 
-        await asyncio.sleep(1)  # Allow audit logs to sync
+        await asyncio.sleep(1)
 
         async for entry in guild.audit_logs(
             action=discord.AuditLogAction.ban,
@@ -31,6 +36,10 @@ class Audit(commands.Cog):
         ):
             if entry.target.id != user.id:
                 continue
+
+            # Ignore bot-issued bans
+            if entry.user and entry.user.id == self.bot.user.id:
+                return
 
             await self.notify_user(
                 user=user,
@@ -44,54 +53,53 @@ class Audit(commands.Cog):
             )
             break
 
-    # =====================================
+    # =================================================
     # MANUAL KICK DETECTION
-    # =====================================
+    # =================================================
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
-        """
-        Detects manual kicks (not voluntary departures).
-        """
         guild = member.guild
 
-        if not guild.me.guild_permissions.view_audit_log:
+        if not self.can_view_audit_logs(guild):
             return
 
         await asyncio.sleep(1)
-
         cutoff = datetime.utcnow() - timedelta(seconds=10)
 
         async for entry in guild.audit_logs(
             action=discord.AuditLogAction.kick,
             limit=5
         ):
-            if (
-                entry.target.id == member.id
-                and entry.created_at.replace(tzinfo=None) >= cutoff
-            ):
-                await self.notify_user(
-                    user=member,
-                    title="🚫 Removal Notice",
-                    description=(
-                        "You have been **removed** from **HellFire Hangout**.\n\n"
-                        f"⚙️ **Action:** Manual Kick\n"
-                        f"👤 **Moderator:** {entry.user}\n"
-                        f"📄 **Reason:** {entry.reason or 'Administrative decision.'}"
-                    ),
-                    color=COLOR_DANGER
-                )
-                break
+            if entry.target.id != member.id:
+                continue
 
-    # =====================================
+            if entry.created_at.replace(tzinfo=None) < cutoff:
+                continue
+
+            # Ignore bot-issued kicks
+            if entry.user and entry.user.id == self.bot.user.id:
+                return
+
+            await self.notify_user(
+                user=member,
+                title="🚫 Removal Notice",
+                description=(
+                    "You have been **removed** from **HellFire Hangout**.\n\n"
+                    f"⚙️ **Action:** Manual Kick\n"
+                    f"👤 **Moderator:** {entry.user}\n"
+                    f"📄 **Reason:** {entry.reason or 'Administrative decision.'}"
+                ),
+                color=COLOR_DANGER
+            )
+            break
+
+    # =================================================
     # MANUAL TIMEOUT DETECTION
-    # =====================================
+    # =================================================
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
-        """
-        Detects manual timeouts applied via Discord UI.
-        """
         if before.timed_out_until == after.timed_out_until:
             return
 
@@ -100,7 +108,7 @@ class Audit(commands.Cog):
 
         guild = after.guild
 
-        if not guild.me.guild_permissions.view_audit_log:
+        if not self.can_view_audit_logs(guild):
             return
 
         await asyncio.sleep(1)
@@ -112,13 +120,18 @@ class Audit(commands.Cog):
             if entry.target.id != after.id:
                 continue
 
+            # Ignore bot-issued timeouts
+            if entry.user and entry.user.id == self.bot.user.id:
+                return
+
             until = after.timed_out_until.strftime("%Y-%m-%d %H:%M UTC")
 
             await self.notify_user(
                 user=after,
                 title="⏳ Temporary Restriction Applied",
                 description=(
-                    "Your communication privileges in **HellFire Hangout** have been **temporarily restricted**.\n\n"
+                    "Your communication privileges in **HellFire Hangout** have been "
+                    "**temporarily restricted**.\n\n"
                     f"👤 **Moderator:** {entry.user}\n"
                     f"⏰ **Until:** {until}\n"
                     f"📄 **Reason:** {entry.reason or 'Cooldown period required.'}"
@@ -127,9 +140,9 @@ class Audit(commands.Cog):
             )
             break
 
-    # =====================================
-    # NOTIFICATION HELPER
-    # =====================================
+    # =================================================
+    # SAFE DM HELPER
+    # =================================================
 
     async def notify_user(
         self,
@@ -138,9 +151,6 @@ class Audit(commands.Cog):
         description: str,
         color: int
     ):
-        """
-        Safely DM a user with audit-related information.
-        """
         try:
             await user.send(
                 embed=luxury_embed(
@@ -150,9 +160,8 @@ class Audit(commands.Cog):
                 )
             )
         except (discord.Forbidden, discord.HTTPException):
-            # DMs closed or user blocked the bot — ignore silently
             pass
 
 
-async def setup(bot):
+async def setup(bot: commands.Bot):
     await bot.add_cog(Audit(bot))
