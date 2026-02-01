@@ -19,7 +19,7 @@ if not TOKEN:
     raise RuntimeError("❌ TOKEN not found in environment variables")
 
 # =====================================================
-# INTENTS (MUST MATCH DEV PORTAL)
+# INTENTS (DO NOT REQUEST PRESENCES)
 # =====================================================
 
 intents = discord.Intents.default()
@@ -27,7 +27,7 @@ intents.guilds = True
 intents.members = True
 intents.message_content = True
 intents.moderation = True
-intents.presences = True   # 🔴 REQUIRED FOR ONLINE STATUS
+# ❌ DO NOT enable intents.presences
 
 # =====================================================
 # BOT
@@ -125,15 +125,13 @@ async def on_command_error(ctx: commands.Context, error):
     raise error
 
 # =====================================================
-# MESSAGE ROUTER (NO DOUBLE EXECUTION)
+# MESSAGE ROUTER (NO DOUBLE EXEC)
 # =====================================================
 
 @bot.event
 async def on_message(message: discord.Message):
     if message.author.bot:
         return
-
-    # Always allow message flow for support/onboarding/security
     await bot.process_commands(message)
 
 # =====================================================
@@ -164,7 +162,7 @@ async def load_cogs():
             print(f"❌ Failed {cog}: {e}")
 
 # =====================================================
-# READY (🔥 THIS IS THE KEY FIX 🔥)
+# READY (THIS WILL NOW FIRE)
 # =====================================================
 
 @bot.event
