@@ -6,7 +6,7 @@ from utils.config import COLOR_GOLD, COLOR_SECONDARY
 from utils import state
 
 
-WELCOME_GIF_URL = "https://github.com/yesh0092/hellfire-bot/blob/916d3f67d1ec0c98ff7d2072165beda0b8544834/welcome%20hell.mp4"
+WELCOME_GIF_URL = "https://raw.githubusercontent.com/yesh0092/hellfire-bot/main/welcome%20hell.mp4"
 
 
 # =====================================================
@@ -19,29 +19,39 @@ class OnboardingView(discord.ui.View):
         self.bot = bot
         self.member = member
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.member.id:
+            await interaction.response.send_message(
+                "❌ This onboarding session is not for you.",
+                ephemeral=True
+            )
+            return False
+        return True
+
     async def finalize(self, interaction: discord.Interaction):
-        # Remove stored onboarding message
         msg_id = state.ONBOARDING_MESSAGES.pop(self.member.id, None)
 
         if msg_id:
             try:
                 msg = await interaction.channel.fetch_message(msg_id)
                 await msg.delete()
-            except:
+            except (discord.NotFound, discord.Forbidden):
                 pass
 
         await interaction.response.send_message(
             embed=luxury_embed(
-                title="Onboarding Complete",
+                title="✅ Onboarding Complete",
                 description=(
-                    "Welcome aboard.\n\n"
-                    "Your access to **Hellfire Hangout** is now fully active.\n"
-                    "If you ever need assistance, simply type `support`."
+                    "Welcome to **HellFire Hangout**.\n\n"
+                    "Your access is now fully active.\n"
+                    "If you ever need assistance, simply type **support**."
                 ),
                 color=COLOR_GOLD
             ),
             ephemeral=True
         )
+
+        self.stop()
 
     @discord.ui.button(label="Friends", style=discord.ButtonStyle.primary)
     async def friends(self, interaction: discord.Interaction, _):
@@ -63,9 +73,7 @@ class OnboardingView(discord.ui.View):
 class Onboarding(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-
-        if not hasattr(state, "ONBOARDING_MESSAGES"):
-            state.ONBOARDING_MESSAGES = {}
+        state.ONBOARDING_MESSAGES = getattr(state, "ONBOARDING_MESSAGES", {})
 
     # -------------------------------------
     # MEMBER JOIN
@@ -80,8 +88,8 @@ class Onboarding(commands.Cog):
             role = guild.get_role(state.AUTO_ROLE_ID)
             if role:
                 try:
-                    await member.add_roles(role)
-                except:
+                    await member.add_roles(role, reason="Automatic onboarding role")
+                except discord.Forbidden:
                     pass
 
         # ---------------- SERVER WELCOME ----------------
@@ -89,11 +97,11 @@ class Onboarding(commands.Cog):
             channel = guild.get_channel(state.WELCOME_CHANNEL_ID)
             if channel:
                 embed = luxury_embed(
-                    title="Welcome to Hellfire Hangout",
+                    title="🔥 Welcome to HellFire Hangout",
                     description=(
                         f"{member.mention}\n\n"
-                        "You’ve joined a space built for meaningful discussion, "
-                        "quality support, and a premium community experience."
+                        "You’ve joined a community built around **quality discussion**, "
+                        "**reliable support**, and **a premium experience**."
                     ),
                     color=COLOR_GOLD
                 )
@@ -109,8 +117,8 @@ class Onboarding(commands.Cog):
                 title="Welcome",
                 description=(
                     "We’re glad to have you here.\n\n"
-                    "This server values clarity, respect, and quality interaction.\n"
-                    "Whenever you need help, simply type `support`."
+                    "This server values respect, clarity, and meaningful interaction.\n"
+                    "Whenever you need help, simply type **support**."
                 ),
                 color=COLOR_SECONDARY
             )
@@ -123,8 +131,8 @@ class Onboarding(commands.Cog):
             inquiry = luxury_embed(
                 title="Quick Question",
                 description=(
-                    "How did you discover **Hellfire Hangout**?\n\n"
-                    "Your response helps us improve our reach."
+                    "How did you discover **HellFire Hangout**?\n\n"
+                    "Your response helps us improve our outreach."
                 ),
                 color=COLOR_SECONDARY
             )
@@ -138,7 +146,7 @@ class Onboarding(commands.Cog):
 
             state.ONBOARDING_MESSAGES[member.id] = msg.id
 
-        except:
+        except (discord.Forbidden, discord.HTTPException):
             pass
 
     # -------------------------------------
@@ -150,38 +158,35 @@ class Onboarding(commands.Cog):
         if message.author.bot:
             return
 
-        # ⚠️ CRITICAL: allow commands to continue working
-        await self.bot.process_commands(message)
-
         if not isinstance(message.channel, discord.DMChannel):
             return
 
         user_id = message.author.id
 
-        # Manual onboarding completion
+        # Manual onboarding completion via text
         if user_id in state.ONBOARDING_MESSAGES:
             try:
                 msg = await message.channel.fetch_message(
                     state.ONBOARDING_MESSAGES.pop(user_id)
                 )
                 await msg.delete()
-            except:
+            except (discord.NotFound, discord.Forbidden):
                 pass
 
             await message.channel.send(
                 embed=luxury_embed(
-                    title="Onboarding Complete",
+                    title="✅ Onboarding Complete",
                     description=(
-                        "Thanks for the response.\n\n"
-                        "You’re all set. Enjoy your time in **Hellfire Hangout**.\n"
-                        "Type `support` anytime if you need assistance."
+                        "Thank you for the response.\n\n"
+                        "You’re all set — enjoy your time in **HellFire Hangout**.\n"
+                        "Type **support** anytime if you need assistance."
                     ),
                     color=COLOR_GOLD
                 )
             )
 
-        # Forward support keyword safely
-        if message.content.lower() == "support":
+        # Forward support keyword ONLY
+        if message.content.lower().strip() == "support":
             support_cog = self.bot.get_cog("Support")
             if support_cog:
                 await support_cog.on_message(message)
@@ -193,4 +198,3 @@ class Onboarding(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(Onboarding(bot))
-
