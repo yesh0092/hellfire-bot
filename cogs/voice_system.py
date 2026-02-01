@@ -11,9 +11,10 @@ class VoiceSystem(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-        # Safe defaults (never overwrite)
+        # Safe defaults (never overwrite existing runtime state)
         state.VOICE_STAY_ENABLED = getattr(state, "VOICE_STAY_ENABLED", False)
         state.VOICE_CHANNEL_ID = getattr(state, "VOICE_CHANNEL_ID", None)
+        state.MAIN_GUILD_ID = getattr(state, "MAIN_GUILD_ID", None)
 
     # =====================================================
     # STARTUP
@@ -26,7 +27,7 @@ class VoiceSystem(commands.Cog):
         self.voice_guard.cancel()
 
     # =====================================================
-    # CORE VOICE CONNECTOR (BULLETPROOF)
+    # CORE VOICE CONNECTOR (100% RELIABLE)
     # =====================================================
 
     async def ensure_voice_connection(self):
@@ -54,16 +55,20 @@ class VoiceSystem(commands.Cog):
         vc = guild.voice_client
 
         try:
-            # Not connected at all
+            # Not connected
             if not vc or not vc.is_connected():
-                await channel.connect(self_deaf=True)
+                await channel.connect(self_mute=True, self_deaf=True)
                 return
 
             # Connected to wrong channel
             if vc.channel.id != channel.id:
                 await vc.disconnect(force=True)
-                await channel.connect(self_deaf=True)
+                await channel.connect(self_mute=True, self_deaf=True)
                 return
+
+            # Ensure mic stays off
+            if not vc.is_self_mute() or not vc.is_self_deaf():
+                await vc.edit(self_mute=True, self_deaf=True)
 
         except (discord.Forbidden, discord.HTTPException):
             pass
@@ -72,7 +77,7 @@ class VoiceSystem(commands.Cog):
     # AUTO REJOIN LOOP (24/7)
     # =====================================================
 
-    @tasks.loop(seconds=20)
+    @tasks.loop(seconds=15)
     async def voice_guard(self):
         await self.ensure_voice_connection()
 
@@ -81,16 +86,42 @@ class VoiceSystem(commands.Cog):
         await self.bot.wait_until_ready()
 
     # =====================================================
-    # SET VOICE CHANNEL
+    # SET VOICE CHANNEL (MENTION OR ID)
     # =====================================================
 
     @commands.command()
     @commands.guild_only()
     @require_level(4)
-    async def setvc(self, ctx: commands.Context, channel: discord.VoiceChannel):
-        bot_member = ctx.guild.get_member(self.bot.user.id)
+    async def setvc(self, ctx: commands.Context, channel: str):
+        """
+        Set voice channel by mention OR ID
+        """
 
-        if not bot_member or not channel.permissions_for(bot_member).connect:
+        bot_member = ctx.guild.get_member(self.bot.user.id)
+        if not bot_member:
+            return
+
+        # ---------------- Resolve channel ----------------
+        vc = None
+
+        # Mention
+        if ctx.message.channel_mentions:
+            vc = ctx.message.channel_mentions[0]
+
+        # ID
+        elif channel.isdigit():
+            vc = ctx.guild.get_channel(int(channel))
+
+        if not isinstance(vc, discord.VoiceChannel):
+            return await ctx.send(
+                embed=luxury_embed(
+                    title="❌ Invalid Channel",
+                    description="Please provide a **valid voice channel mention or ID**.",
+                    color=COLOR_DANGER
+                )
+            )
+
+        if not vc.permissions_for(bot_member).connect:
             return await ctx.send(
                 embed=luxury_embed(
                     title="❌ Missing Permissions",
@@ -99,7 +130,8 @@ class VoiceSystem(commands.Cog):
                 )
             )
 
-        state.VOICE_CHANNEL_ID = channel.id
+        # ---------------- Save state ----------------
+        state.VOICE_CHANNEL_ID = vc.id
         state.VOICE_STAY_ENABLED = True
         state.MAIN_GUILD_ID = ctx.guild.id
 
@@ -109,10 +141,11 @@ class VoiceSystem(commands.Cog):
             embed=luxury_embed(
                 title="🔊 Voice Presence Enabled",
                 description=(
-                    f"🎧 **Channel:** {channel.name}\n\n"
+                    f"🎧 **Channel:** {vc.name}\n\n"
                     "• 24/7 Presence\n"
-                    "• Auto-rejoin on disconnect\n"
-                    "• Silent (self-deaf)\n"
+                    "• Auto-rejoin enabled\n"
+                    "• 🎤 Mic OFF\n"
+                    "• 🔇 Deafened\n"
                     "• No recording"
                 ),
                 color=COLOR_GOLD
@@ -139,7 +172,7 @@ class VoiceSystem(commands.Cog):
         await ctx.send(
             embed=luxury_embed(
                 title="❌ Voice Presence Disabled",
-                description="The bot will no longer stay in voice channels.",
+                description="The bot will no longer stay in any voice channel.",
                 color=COLOR_DANGER
             )
         )
@@ -170,7 +203,8 @@ class VoiceSystem(commands.Cog):
                     f"🎧 **Channel:** {channel.name if channel else 'Unknown'}\n"
                     "🔁 Auto-rejoin: Enabled\n"
                     "🕒 Presence: 24/7\n"
-                    "🔒 Silent mode: Active"
+                    "🎤 Mic: OFF\n"
+                    "🔇 Deafened: ON"
                 ),
                 color=COLOR_GOLD
             )
