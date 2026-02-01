@@ -9,20 +9,25 @@ from utils import state
 
 
 class System(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.start_time = datetime.utcnow()
+
+        # Ensure flags exist
+        state.SYSTEM_FLAGS = getattr(state, "SYSTEM_FLAGS", {})
+        state.SYSTEM_FLAGS.setdefault("panic_mode", False)
 
     # =====================================================
     # HELP (STAFF ONLY)
     # =====================================================
 
     @commands.command()
+    @commands.guild_only()
     @require_level(1)  # Staff
-    async def help(self, ctx):
+    async def help(self, ctx: commands.Context):
         await ctx.send(
             embed=luxury_embed(
-                title="🌙 Hellfire Hangout — Command Codex",
+                title="🌙 HellFire Hangout — Command Codex",
                 description=(
                     "**🛎️ SUPPORT (USERS)**\n"
                     "`support` → Open support via DM\n"
@@ -83,8 +88,9 @@ class System(commands.Cog):
     # =====================================================
 
     @commands.command()
+    @commands.guild_only()
     @require_level(1)  # Staff
-    async def status(self, ctx):
+    async def status(self, ctx: commands.Context):
         uptime = datetime.utcnow() - self.start_time
         h, r = divmod(int(uptime.total_seconds()), 3600)
         m, s = divmod(r, 60)
@@ -96,7 +102,7 @@ class System(commands.Cog):
                     f"🟢 **Bot Status:** Online\n"
                     f"⏱ **Uptime:** {h}h {m}m {s}s\n"
                     f"🚨 **Panic Mode:** {'ON' if state.SYSTEM_FLAGS.get('panic_mode') else 'OFF'}\n"
-                    f"🔊 **Voice Presence:** {'ON' if state.VOICE_STAY_ENABLED else 'OFF'}\n"
+                    f"🔊 **Voice Presence:** {'ON' if getattr(state, 'VOICE_STAY_ENABLED', False) else 'OFF'}\n"
                     f"🧠 **Loaded Cogs:** {len(self.bot.cogs)}\n"
                     f"📁 **Bot Logs:** {'Enabled' if state.BOT_LOG_CHANNEL_ID else 'Disabled'}"
                 ),
@@ -109,8 +115,9 @@ class System(commands.Cog):
     # =====================================================
 
     @commands.command()
+    @commands.guild_only()
     @require_level(4)  # Staff+++
-    async def panic(self, ctx):
+    async def panic(self, ctx: commands.Context):
         state.SYSTEM_FLAGS["panic_mode"] = True
 
         await ctx.send(
@@ -129,14 +136,15 @@ class System(commands.Cog):
         await self._log(ctx, "🚨 Panic mode enabled")
 
     @commands.command()
+    @commands.guild_only()
     @require_level(4)  # Staff+++
-    async def unpanic(self, ctx):
+    async def unpanic(self, ctx: commands.Context):
         state.SYSTEM_FLAGS["panic_mode"] = False
 
         await ctx.send(
             embed=luxury_embed(
                 title="✅ Panic Mode Disabled",
-                description="All systems restored to normal operation.",
+                description="All systems have been restored to normal operation.",
                 color=COLOR_GOLD
             )
         )
@@ -144,25 +152,27 @@ class System(commands.Cog):
         await self._log(ctx, "✅ Panic mode disabled")
 
     # =====================================================
-    # BOT LOG CHANNEL
+    # BOT LOG CHANNEL (SYSTEM LEVEL)
     # =====================================================
 
     @commands.command()
+    @commands.guild_only()
     @require_level(4)
-    async def setbotlog(self, ctx):
+    async def setbotlog(self, ctx: commands.Context):
         state.BOT_LOG_CHANNEL_ID = ctx.channel.id
 
         await ctx.send(
             embed=luxury_embed(
-                title="📁 Bot Log Enabled",
+                title="📁 Bot Logging Enabled",
                 description="This channel will now receive **system & security logs**.",
                 color=COLOR_GOLD
             )
         )
 
     @commands.command()
+    @commands.guild_only()
     @require_level(4)
-    async def unsetbotlog(self, ctx):
+    async def unsetbotlog(self, ctx: commands.Context):
         if not state.BOT_LOG_CHANNEL_ID:
             return await ctx.send(
                 embed=luxury_embed(
@@ -186,7 +196,7 @@ class System(commands.Cog):
     # INTERNAL LOGGER
     # =====================================================
 
-    async def _log(self, ctx, message: str):
+    async def _log(self, ctx: commands.Context, message: str):
         if not state.BOT_LOG_CHANNEL_ID:
             return
 
@@ -194,13 +204,16 @@ class System(commands.Cog):
         if not channel:
             return
 
-        await channel.send(
-            embed=luxury_embed(
-                title="📁 System Log",
-                description=f"{message}\n\n**By:** {ctx.author.mention}",
-                color=COLOR_SECONDARY
+        try:
+            await channel.send(
+                embed=luxury_embed(
+                    title="📁 System Log",
+                    description=f"{message}\n\n**By:** {ctx.author.mention}",
+                    color=COLOR_SECONDARY
+                )
             )
-        )
+        except (discord.Forbidden, discord.HTTPException):
+            pass
 
 
 async def setup(bot):
