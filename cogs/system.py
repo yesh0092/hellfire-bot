@@ -7,7 +7,6 @@ from utils.config import COLOR_GOLD, COLOR_SECONDARY, COLOR_DANGER
 from utils.permissions import require_level
 from utils import state
 
-
 BOT_PREFIX = "&"  # 🔥 SINGLE SOURCE OF TRUTH
 
 
@@ -21,6 +20,12 @@ class System(commands.Cog):
             state.SYSTEM_FLAGS = {}
 
         state.SYSTEM_FLAGS.setdefault("panic_mode", False)
+
+        # 🔥 Feature flags (informational)
+        state.SYSTEM_FLAGS.setdefault("mvp_system", True)
+        state.SYSTEM_FLAGS.setdefault("profile_stats", True)
+        state.SYSTEM_FLAGS.setdefault("message_tracking", True)
+        state.SYSTEM_FLAGS.setdefault("silent_automod", True)
 
     # =====================================================
     # HELP (STAFF ONLY)
@@ -41,6 +46,16 @@ class System(commands.Cog):
                     "• Button-based tickets\n"
                     "• Auto status & priority\n\n"
 
+                    "**📊 USER STATS (USERS)**\n"
+                    f"`{BOT_PREFIX}profile [@user]` → View message stats\n"
+                    "• Weekly message tracking\n"
+                    "• Compete for **Text MVP** role\n\n"
+
+                    "**🏆 WEEKLY TEXT MVP**\n"
+                    "• Highest messages in the week wins\n"
+                    "• Role auto-rotates every week\n"
+                    "• No manual staff action required\n\n"
+
                     "**⚠️ MODERATION (STAFF)**\n"
                     f"`{BOT_PREFIX}warn @user <reason>`\n"
                     f"`{BOT_PREFIX}unwarn @user [count]`\n"
@@ -57,10 +72,10 @@ class System(commands.Cog):
                     f"`{BOT_PREFIX}unsetvc`\n"
                     f"`{BOT_PREFIX}vcstatus`\n\n"
 
-                    "**🛡️ SECURITY**\n"
-                    "• Invite & spam protection\n"
-                    "• Raid detection\n"
-                    "• Panic mode\n\n"
+                    "**🛡️ SECURITY & AUTOMOD**\n"
+                    "• Silent spam suppression\n"
+                    "• Panic mode escalation\n"
+                    "• Raid & invite protection\n\n"
 
                     "**⚙️ ADMIN (STAFF+++)**\n"
                     f"`{BOT_PREFIX}setup`\n"
@@ -98,7 +113,13 @@ class System(commands.Cog):
                 title="📊 System Status",
                 description=(
                     "🟢 **Bot Status:** Online\n"
-                    f"⏱ **Uptime:** {h}h {m}m {s}s\n"
+                    f"⏱ **Uptime:** {h}h {m}m {s}s\n\n"
+
+                    f"🏆 **Weekly MVP System:** {'ON' if state.SYSTEM_FLAGS.get('mvp_system') else 'OFF'}\n"
+                    f"📊 **Message Tracking:** {'ON' if state.SYSTEM_FLAGS.get('message_tracking') else 'OFF'}\n"
+                    f"👤 **Profile Stats:** {'ON' if state.SYSTEM_FLAGS.get('profile_stats') else 'OFF'}\n"
+                    f"🛡️ **Silent AutoMod:** {'ON' if state.SYSTEM_FLAGS.get('silent_automod') else 'OFF'}\n\n"
+
                     f"🚨 **Panic Mode:** {'ON' if state.SYSTEM_FLAGS.get('panic_mode') else 'OFF'}\n"
                     f"🔊 **Voice Presence:** {'ON' if getattr(state, 'VOICE_STAY_ENABLED', False) else 'OFF'}\n"
                     f"🧠 **Loaded Cogs:** {len(self.bot.cogs)}\n"
