@@ -3,7 +3,6 @@ from discord.ext import commands
 
 from utils.embeds import luxury_embed
 from utils.config import COLOR_GOLD, COLOR_SECONDARY, COLOR_DANGER
-from utils.permissions import require_level
 from utils import state
 
 
@@ -12,13 +11,35 @@ class Admin(commands.Cog):
         self.bot = bot
 
     # =================================================
-    # STAFF ROLE SYSTEM SETUP
+    # BOOTSTRAP SETUP (CRITICAL FIX)
     # =================================================
 
-    @commands.command(name="setupstaff")
+    @commands.command(name="setup")
     @commands.guild_only()
-    @require_level(4)  # Staff+++
-    async def setup_staff(self, ctx: commands.Context):
+    async def setup(self, ctx: commands.Context):
+        """
+        Bootstrap command:
+        • Allowed for Server Owner OR Administrator
+        • Creates staff roles
+        • Initializes STAFF_ROLE_TIERS
+        """
+
+        # ---------- PERMISSION GATE ----------
+        if not (
+            ctx.author == ctx.guild.owner
+            or ctx.author.guild_permissions.administrator
+        ):
+            return await ctx.send(
+                embed=luxury_embed(
+                    title="❌ Permission Denied",
+                    description=(
+                        "Only the **Server Owner** or an **Administrator** "
+                        "can run the initial setup."
+                    ),
+                    color=COLOR_DANGER
+                )
+            )
+
         guild = ctx.guild
         state.MAIN_GUILD_ID = guild.id
 
@@ -27,11 +48,12 @@ class Admin(commands.Cog):
             return await ctx.send(
                 embed=luxury_embed(
                     title="❌ Missing Permissions",
-                    description="I need **Manage Roles** permission to set up staff roles.",
+                    description="I need **Manage Roles** permission to complete setup.",
                     color=COLOR_DANGER
                 )
             )
 
+        # ---------- STAFF ROLE MAP ----------
         role_map = {
             1: "Staff",
             2: "Staff+",
@@ -47,7 +69,7 @@ class Admin(commands.Cog):
             if not role:
                 role = await guild.create_role(
                     name=name,
-                    reason="HellFire Hangout • Staff System Setup"
+                    reason="HellFire Hangout • Initial Staff Setup"
                 )
                 created_roles.append(name)
 
@@ -55,15 +77,16 @@ class Admin(commands.Cog):
 
         await ctx.send(
             embed=luxury_embed(
-                title="⚙️ Staff System Ready",
+                title="⚙️ Initial Setup Complete",
                 description=(
-                    "The **staff hierarchy** has been successfully configured.\n\n"
-                    "**Authority Levels:**\n"
+                    "The **HellFire Hangout staff system** is now live.\n\n"
+                    "**Staff Hierarchy:**\n"
                     "• **Staff** → Warnings & tickets\n"
                     "• **Staff+** → Timeouts\n"
                     "• **Staff++** → Kicks\n"
                     "• **Staff+++** → Bans & configuration\n\n"
-                    f"{'🆕 Created Roles: ' + ', '.join(created_roles) if created_roles else '✅ All roles already existed.'}"
+                    f"{'🆕 Created Roles: ' + ', '.join(created_roles) if created_roles else '✅ All roles already existed.'}\n\n"
+                    "👉 You may now assign roles and use all admin commands."
                 ),
                 color=COLOR_GOLD
             )
@@ -75,8 +98,10 @@ class Admin(commands.Cog):
 
     @commands.command()
     @commands.guild_only()
-    @require_level(4)
     async def welcome(self, ctx: commands.Context):
+        if not self._is_staff_level(ctx, 4):
+            return
+
         state.WELCOME_CHANNEL_ID = ctx.channel.id
         state.MAIN_GUILD_ID = ctx.guild.id
 
@@ -90,8 +115,10 @@ class Admin(commands.Cog):
 
     @commands.command()
     @commands.guild_only()
-    @require_level(4)
     async def unwelcome(self, ctx: commands.Context):
+        if not self._is_staff_level(ctx, 4):
+            return
+
         if not state.WELCOME_CHANNEL_ID:
             return await ctx.send(
                 embed=luxury_embed(
@@ -117,8 +144,10 @@ class Admin(commands.Cog):
 
     @commands.command()
     @commands.guild_only()
-    @require_level(4)
     async def supportlog(self, ctx: commands.Context):
+        if not self._is_staff_level(ctx, 4):
+            return
+
         state.SUPPORT_LOG_CHANNEL_ID = ctx.channel.id
         state.MAIN_GUILD_ID = ctx.guild.id
 
@@ -132,16 +161,9 @@ class Admin(commands.Cog):
 
     @commands.command()
     @commands.guild_only()
-    @require_level(4)
     async def unsupportlog(self, ctx: commands.Context):
-        if not state.SUPPORT_LOG_CHANNEL_ID:
-            return await ctx.send(
-                embed=luxury_embed(
-                    title="ℹ️ Already Disabled",
-                    description="Support logging is already disabled.",
-                    color=COLOR_SECONDARY
-                )
-            )
+        if not self._is_staff_level(ctx, 4):
+            return
 
         state.SUPPORT_LOG_CHANNEL_ID = None
 
@@ -159,8 +181,10 @@ class Admin(commands.Cog):
 
     @commands.command()
     @commands.guild_only()
-    @require_level(4)
     async def autorole(self, ctx: commands.Context, role: discord.Role):
+        if not self._is_staff_level(ctx, 4):
+            return
+
         state.AUTO_ROLE_ID = role.id
         state.MAIN_GUILD_ID = ctx.guild.id
 
@@ -174,16 +198,9 @@ class Admin(commands.Cog):
 
     @commands.command()
     @commands.guild_only()
-    @require_level(4)
     async def unautorole(self, ctx: commands.Context):
-        if not state.AUTO_ROLE_ID:
-            return await ctx.send(
-                embed=luxury_embed(
-                    title="ℹ️ Autorole Disabled",
-                    description="No autorole is currently configured.",
-                    color=COLOR_SECONDARY
-                )
-            )
+        if not self._is_staff_level(ctx, 4):
+            return
 
         state.AUTO_ROLE_ID = None
 
@@ -196,30 +213,34 @@ class Admin(commands.Cog):
         )
 
     # =================================================
-    # CONFIG OVERVIEW
+    # INTERNAL STAFF CHECK (SAFE)
     # =================================================
 
-    @commands.command()
-    @commands.guild_only()
-    @require_level(4)
-    async def config(self, ctx: commands.Context):
-        guild = ctx.guild
+    def _is_staff_level(self, ctx: commands.Context, required: int) -> bool:
+        if ctx.author == ctx.guild.owner:
+            return True
+        if ctx.author.guild_permissions.administrator:
+            return True
 
-        welcome = guild.get_channel(state.WELCOME_CHANNEL_ID) if state.WELCOME_CHANNEL_ID else None
-        supportlog = guild.get_channel(state.SUPPORT_LOG_CHANNEL_ID) if state.SUPPORT_LOG_CHANNEL_ID else None
-        autorole = guild.get_role(state.AUTO_ROLE_ID) if state.AUTO_ROLE_ID else None
+        highest = 0
+        for level, role_id in state.STAFF_ROLE_TIERS.items():
+            if role_id and any(r.id == role_id for r in ctx.author.roles):
+                highest = max(highest, level)
 
-        await ctx.send(
-            embed=luxury_embed(
-                title="⚙️ Configuration Overview",
-                description=(
-                    f"👋 **Welcome Channel:** {welcome.mention if welcome else 'Disabled'}\n"
-                    f"📊 **Support Logs:** {supportlog.mention if supportlog else 'Disabled'}\n"
-                    f"🏅 **Autorole:** {autorole.mention if autorole else 'Disabled'}"
-                ),
-                color=COLOR_GOLD
+        if highest < required:
+            ctx.bot.loop.create_task(
+                ctx.send(
+                    embed=luxury_embed(
+                        title="❌ Permission Denied",
+                        description="Your staff level is too low for this action.",
+                        color=COLOR_DANGER
+                    ),
+                    delete_after=5
+                )
             )
-        )
+            return False
+
+        return True
 
 
 async def setup(bot: commands.Bot):
