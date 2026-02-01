@@ -14,14 +14,16 @@ from utils.config import (
 from utils import state
 
 
+DM_PANEL_COOLDOWN = timedelta(minutes=5)
+
+
 # =====================================================
 # CLOSE TICKET VIEW
 # =====================================================
 
 class CloseTicketView(discord.ui.View):
-    def __init__(self, bot: commands.Bot, owner_id: int):
+    def __init__(self, owner_id: int):
         super().__init__(timeout=None)
-        self.bot = bot
         self.owner_id = owner_id
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -41,14 +43,11 @@ class CloseTicketView(discord.ui.View):
         return True
 
     @discord.ui.button(label="Close Ticket", emoji="🔒", style=discord.ButtonStyle.danger)
-    async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        button.disabled = True
-        await interaction.message.edit(view=self)
-
+    async def close_ticket(self, interaction: discord.Interaction, _):
         await interaction.response.send_message(
             embed=luxury_embed(
                 title="🔒 Ticket Closed",
-                description="This ticket has been closed successfully.",
+                description="This ticket will close shortly.",
                 color=COLOR_SECONDARY
             ),
             ephemeral=True
@@ -69,32 +68,31 @@ class CloseTicketView(discord.ui.View):
 # =====================================================
 
 class SupportView(discord.ui.View):
-    def __init__(self, bot: commands.Bot, user: discord.User):
+    def __init__(self, user: discord.User):
         super().__init__(timeout=180)
-        self.bot = bot
         self.user = user
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user.id:
             await interaction.response.send_message(
-                "❌ This support panel is not for you.",
+                "❌ This panel is not for you.",
                 ephemeral=True
             )
             return False
         return True
 
-    def clear_dm_session(self):
-        state.DM_SUPPORT_ACTIVE.discard(self.user.id)
+    def clear_session(self):
+        state.DM_SUPPORT_ACTIVE.pop(self.user.id, None)
 
     # ---------------- CREATE TICKET ----------------
 
     @discord.ui.button(label="Create Ticket", emoji="🎟️", style=discord.ButtonStyle.primary)
     async def open_ticket(self, interaction: discord.Interaction, _):
-        self.clear_dm_session()
+        self.clear_session()
 
-        guild = self.bot.get_guild(state.MAIN_GUILD_ID)
+        guild = interaction.client.get_guild(state.MAIN_GUILD_ID)
         if not guild:
-            await interaction.response.send_message(
+            return await interaction.response.send_message(
                 embed=luxury_embed(
                     title="⚙️ System Unavailable",
                     description="Support is currently unavailable.",
@@ -102,41 +100,32 @@ class SupportView(discord.ui.View):
                 ),
                 ephemeral=True
             )
-            return
-
-        if self.user.id in state.TICKET_BANNED_USERS:
-            await interaction.response.send_message(
-                embed=luxury_embed(
-                    title="🚫 Access Restricted",
-                    description="You are not permitted to open support tickets.",
-                    color=COLOR_DANGER
-                ),
-                ephemeral=True
-            )
-            return
 
         if self.user.id in state.OPEN_TICKETS:
-            await interaction.response.send_message(
+            return await interaction.response.send_message(
                 embed=luxury_embed(
                     title="⏳ Ticket Already Open",
-                    description="You already have an active support ticket.",
+                    description="You already have an active ticket.",
                     color=COLOR_SECONDARY
                 ),
                 ephemeral=True
             )
-            return
 
         category = discord.utils.get(guild.categories, name=SUPPORT_CATEGORY_NAME)
         if not category:
-            try:
-                category = await guild.create_category(SUPPORT_CATEGORY_NAME)
-            except discord.Forbidden:
-                return
+            category = await guild.create_category(SUPPORT_CATEGORY_NAME)
 
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
             self.user: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
+
+        for role in guild.roles:
+            if role.name.startswith("Staff"):
+                overwrites[role] = discord.PermissionOverwrite(
+                    read_messages=True,
+                    send_messages=True
+                )
 
         channel = await guild.create_text_channel(
             f"ticket-{self.user.name}",
@@ -151,80 +140,40 @@ class SupportView(discord.ui.View):
                 title="🌙 Support Ticket",
                 description=(
                     f"**User:** {self.user.mention}\n"
-                    "**Status:** 🟡 Awaiting Staff\n"
-                    "**Priority:** 🟢 Normal\n\n"
+                    "**Status:** 🟡 Awaiting Staff\n\n"
                     "Please describe your issue below."
                 ),
                 color=COLOR_GOLD
             ),
-            view=CloseTicketView(self.bot, self.user.id)
+            view=CloseTicketView(self.user.id)
         )
 
         state.TICKET_META[channel.id] = {
             "owner": self.user.id,
             "created_at": datetime.utcnow(),
             "last_activity": datetime.utcnow(),
-            "status": "waiting_staff",
-            "priority": "normal",
             "panel_id": panel.id
         }
 
         await interaction.response.send_message(
             embed=luxury_embed(
                 title="✅ Ticket Created",
-                description="Your support ticket has been opened successfully.",
+                description="Your support ticket has been opened.",
                 color=COLOR_GOLD
             ),
             ephemeral=True
         )
-
-    # ---------------- PERSONAL ASSISTANCE ----------------
-
-    @discord.ui.button(label="Personal Assistance", emoji="👑", style=discord.ButtonStyle.secondary)
-    async def vip(self, interaction: discord.Interaction, _):
-        self.clear_dm_session()
-
-        await interaction.response.send_message(
-            embed=luxury_embed(
-                title="🛎️ Request Submitted",
-                description="A senior staff member will contact you shortly.",
-                color=COLOR_GOLD
-            ),
-            ephemeral=True
-        )
-
-        guild = self.bot.get_guild(state.MAIN_GUILD_ID)
-        if not guild:
-            return
-
-        log_channel = guild.get_channel(
-            state.SUPPORT_LOG_CHANNEL_ID or state.BOT_LOG_CHANNEL_ID
-        )
-        if log_channel:
-            await log_channel.send(
-                embed=luxury_embed(
-                    title="👑 VIP Assistance Request",
-                    description=(
-                        f"**User:** {self.user.mention}\n"
-                        f"**ID:** `{self.user.id}`\n"
-                        "**Priority:** 🔴 High"
-                    ),
-                    color=COLOR_GOLD
-                )
-            )
 
     # ---------------- CANCEL ----------------
 
-    @discord.ui.button(label="Cancel", emoji="❌", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="Cancel", emoji="❌", style=discord.ButtonStyle.secondary)
     async def cancel(self, interaction: discord.Interaction, _):
-        self.clear_dm_session()
-
-        await interaction.message.edit(
-            content="Ticket creation cancelled.",
+        self.clear_session()
+        await interaction.response.edit_message(
+            content="Support request cancelled.",
             embed=None,
             view=None
         )
-        await interaction.response.defer()
 
 
 # =====================================================
@@ -234,7 +183,7 @@ class SupportView(discord.ui.View):
 class Support(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        state.DM_SUPPORT_ACTIVE = getattr(state, "DM_SUPPORT_ACTIVE", set())
+        state.DM_SUPPORT_ACTIVE = getattr(state, "DM_SUPPORT_ACTIVE", {})
 
     async def cog_load(self):
         self.ticket_watcher.start()
@@ -249,60 +198,27 @@ class Support(commands.Cog):
         if message.author.bot:
             return
 
-        # DM SUPPORT FLOW ONLY
-        if isinstance(message.channel, discord.DMChannel):
-            user_id = message.author.id
-
-            if user_id in state.DM_SUPPORT_ACTIVE:
-                return
-
-            state.DM_SUPPORT_ACTIVE.add(user_id)
-
-            await message.channel.send(
-                embed=luxury_embed(
-                    title="🛎️ Support Portal",
-                    description=(
-                        "**HellFire Hangout Support** ✨\n\n"
-                        "Please choose how you would like to proceed."
-                    ),
-                    color=COLOR_PRIMARY
-                ),
-                view=SupportView(self.bot, message.author)
-            )
+        if not isinstance(message.channel, discord.DMChannel):
             return
 
-        # Ticket activity tracking
-        if message.guild and message.channel.id in state.TICKET_META:
-            meta = state.TICKET_META[message.channel.id]
-            meta["last_activity"] = datetime.utcnow()
-            meta["status"] = (
-                "waiting_staff"
-                if message.author.id == meta["owner"]
-                else "staff_engaged"
-            )
-            await self.update_ticket_panel(message.channel)
-
-    # ---------------- PANEL UPDATE ----------------
-
-    async def update_ticket_panel(self, channel: discord.TextChannel):
-        meta = state.TICKET_META.get(channel.id)
-        if not meta:
+        if message.content.lower().strip() != "support":
             return
 
-        try:
-            panel = await channel.fetch_message(meta["panel_id"])
-        except (discord.NotFound, discord.Forbidden):
+        now = datetime.utcnow()
+        last = state.DM_SUPPORT_ACTIVE.get(message.author.id)
+
+        if last and now - last < DM_PANEL_COOLDOWN:
             return
 
-        await panel.edit(
+        state.DM_SUPPORT_ACTIVE[message.author.id] = now
+
+        await message.channel.send(
             embed=luxury_embed(
-                title="🌙 Support Ticket",
-                description=(
-                    f"**Status:** {meta['status'].replace('_', ' ').title()}\n"
-                    f"**Priority:** {'🔴 High' if meta['priority'] == 'high' else '🟢 Normal'}"
-                ),
-                color=COLOR_GOLD
-            )
+                title="🛎️ HellFire Hangout Support",
+                description="Choose how you’d like to proceed.",
+                color=COLOR_PRIMARY
+            ),
+            view=SupportView(message.author)
         )
 
     # ---------------- AUTO CLOSE ----------------
@@ -319,7 +235,7 @@ class Support(commands.Cog):
                         await channel.send(
                             embed=luxury_embed(
                                 title="⏳ Ticket Closed",
-                                description="This ticket was closed due to inactivity.",
+                                description="Closed due to inactivity.",
                                 color=COLOR_SECONDARY
                             )
                         )
@@ -336,5 +252,5 @@ class Support(commands.Cog):
         await self.bot.wait_until_ready()
 
 
-async def setup(bot):
+async def setup(bot: commands.Bot):
     await bot.add_cog(Support(bot))
