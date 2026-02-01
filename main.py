@@ -41,22 +41,41 @@ def get_user_level(member: discord.Member) -> int:
 
     return 0
 
-# ================= GLOBAL COMMAND GUARD =================
+# ================= GLOBAL COMMAND GUARDS =================
+
+@bot.check
+async def block_commands_in_dm(ctx: commands.Context) -> bool:
+    """
+    HARD BLOCK: Commands must NEVER run in DMs
+    """
+    if ctx.guild is None:
+        try:
+            await ctx.send("❌ Commands are disabled in DMs.\nPlease use commands inside the server.")
+        except discord.Forbidden:
+            pass
+        return False
+    return True
+
 
 @bot.check
 async def strict_role_guard(ctx: commands.Context) -> bool:
-    if ctx.guild is None:
-        return True
-
+    """
+    ROLE + PERMISSION GUARD
+    """
     if await bot.is_owner(ctx.author):
         return True
 
     user_level = get_user_level(ctx.author)
     if user_level <= 0:
+        await ctx.send("❌ You do not have permission to use this command.")
         return False
 
     required_level = getattr(ctx.command.callback, "required_level", 1)
-    return user_level >= required_level
+    if user_level < required_level:
+        await ctx.send("❌ Your staff level is too low for this command.")
+        return False
+
+    return True
 
 # ================= ERROR HANDLER =================
 
@@ -64,15 +83,33 @@ async def strict_role_guard(ctx: commands.Context) -> bool:
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CheckFailure):
         return
+
     if isinstance(error, commands.MissingRequiredArgument):
         await ctx.send("⚠️ Missing required arguments.")
         return
+
     if isinstance(error, commands.BadArgument):
         await ctx.send("⚠️ Invalid argument provided.")
         return
+
     if isinstance(error, commands.CommandNotFound):
         return
+
     raise error
+
+# ================= ON MESSAGE (ANTI DOUBLE EXEC) =================
+
+@bot.event
+async def on_message(message: discord.Message):
+    if message.author.bot:
+        return
+
+    # Allow DMs ONLY for onboarding/support logic (no commands)
+    if isinstance(message.channel, discord.DMChannel):
+        return
+
+    # IMPORTANT: process commands ONLY ONCE
+    await bot.process_commands(message)
 
 # ================= COG LOADER =================
 
@@ -88,7 +125,7 @@ COGS = [
     "cogs.audit",
     "cogs.announce",
     "cogs.voice_system",
-    "cogs.onboarding",   # ✅ ENSURE THIS EXISTS
+    "cogs.onboarding",
 ]
 
 async def load_cogs():
@@ -104,6 +141,9 @@ async def load_cogs():
 @bot.event
 async def on_ready():
     print(f"🌙 {bot.user} | Hellfire Hangout ONLINE")
+    print("✅ Commands locked to server only")
+    print("🛡️ Role guard active")
+    print("⚙️ No duplicate command execution")
 
 # ================= MAIN =================
 
@@ -112,4 +152,5 @@ async def main():
         await load_cogs()
         await bot.start(TOKEN)
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
