@@ -6,8 +6,9 @@ from utils.config import COLOR_GOLD, COLOR_SECONDARY
 from utils import state
 
 
-WELCOME_GIF_URL = "https://raw.githubusercontent.com/yesh0092/hellfire-bot/main/welcome%20hell.mp4"
-
+WELCOME_GIF_URL = (
+    "https://raw.githubusercontent.com/yesh0092/hellfire-bot/main/welcome%20hell.mp4"
+)
 
 # =====================================================
 # ONBOARDING VIEW
@@ -27,6 +28,19 @@ class OnboardingView(discord.ui.View):
             )
             return False
         return True
+
+    async def on_timeout(self):
+        # Auto-clean expired onboarding panel
+        msg_id = state.ONBOARDING_MESSAGES.pop(self.member.id, None)
+        if not msg_id:
+            return
+
+        try:
+            channel = self.member.dm_channel or await self.member.create_dm()
+            msg = await channel.fetch_message(msg_id)
+            await msg.delete()
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            pass
 
     async def finalize(self, interaction: discord.Interaction):
         msg_id = state.ONBOARDING_MESSAGES.pop(self.member.id, None)
@@ -73,7 +87,6 @@ class OnboardingView(discord.ui.View):
 class Onboarding(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        state.ONBOARDING_MESSAGES = getattr(state, "ONBOARDING_MESSAGES", {})
 
     # -------------------------------------
     # MEMBER JOIN
@@ -111,7 +124,7 @@ class Onboarding(commands.Cog):
 
                 await channel.send(embed=embed)
 
-        # ---------------- DM WELCOME ----------------
+        # ---------------- DM ONBOARDING ----------------
         try:
             welcome = luxury_embed(
                 title="Welcome",
@@ -150,17 +163,13 @@ class Onboarding(commands.Cog):
             pass
 
     # -------------------------------------
-    # DM HANDLER (ONBOARDING + SUPPORT)
+    # EXTERNAL DM HANDLER (CALLED FROM MAIN)
     # -------------------------------------
 
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        if message.author.bot:
-            return
-
-        if not isinstance(message.channel, discord.DMChannel):
-            return
-
+    async def handle_dm(self, message: discord.Message):
+        """
+        Called safely from main.py for DM-only logic.
+        """
         user_id = message.author.id
 
         # Manual onboarding completion via text
@@ -185,16 +194,16 @@ class Onboarding(commands.Cog):
                 )
             )
 
-        # Forward support keyword ONLY
+        # Forward support keyword
         if message.content.lower().strip() == "support":
             support_cog = self.bot.get_cog("Support")
-            if support_cog:
-                await support_cog.on_message(message)
+            if support_cog and hasattr(support_cog, "handle_dm"):
+                await support_cog.handle_dm(message)
 
 
 # =====================================================
 # SETUP
 # =====================================================
 
-async def setup(bot):
+async def setup(bot: commands.Bot):
     await bot.add_cog(Onboarding(bot))
