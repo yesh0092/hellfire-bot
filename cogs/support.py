@@ -72,9 +72,10 @@ class CloseTicketView(discord.ui.View):
 # =====================================================
 
 class SupportView(discord.ui.View):
-    def __init__(self, user: discord.User):
+    def __init__(self, user: discord.User, message_id: int):
         super().__init__(timeout=180)
         self.user = user
+        self.message_id = message_id
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user.id:
@@ -89,8 +90,28 @@ class SupportView(discord.ui.View):
         state.DM_SUPPORT_SESSIONS.pop(self.user.id, None)
 
     async def on_timeout(self):
-        # Panel expired → allow new request
+        """
+        Edit the panel when it expires instead of deleting it
+        """
         self.clear_session()
+
+        try:
+            channel = self.user.dm_channel or await self.user.create_dm()
+            msg = await channel.fetch_message(self.message_id)
+
+            await msg.edit(
+                embed=luxury_embed(
+                    title="⏳ Support Session Expired",
+                    description=(
+                        "This support panel is no longer active.\n\n"
+                        "Please send **any message** again to open a new support session."
+                    ),
+                    color=COLOR_SECONDARY
+                ),
+                view=None
+            )
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            pass
 
     # ---------------- CREATE TICKET ----------------
 
@@ -218,21 +239,9 @@ class Support(commands.Cog):
 
         session = state.DM_SUPPORT_SESSIONS.get(user_id)
 
-        # Active panel still valid → ignore
+        # Active panel still valid → do nothing
         if session and now - session["created_at"] < DM_PANEL_EXPIRY:
             return
-
-        # Expired panel → delete old one
-        if session:
-            try:
-                old_msg = await message.channel.fetch_message(
-                    session["message_id"]
-                )
-                await old_msg.delete()
-            except (discord.NotFound, discord.Forbidden):
-                pass
-
-            state.DM_SUPPORT_SESSIONS.pop(user_id, None)
 
         # Send new panel
         panel_msg = await message.channel.send(
@@ -243,9 +252,11 @@ class Support(commands.Cog):
                     "⏳ This panel will expire in **5 minutes**."
                 ),
                 color=COLOR_PRIMARY
-            ),
-            view=SupportView(message.author)
+            )
         )
+
+        view = SupportView(message.author, panel_msg.id)
+        await panel_msg.edit(view=view)
 
         state.DM_SUPPORT_SESSIONS[user_id] = {
             "message_id": panel_msg.id,
