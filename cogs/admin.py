@@ -11,7 +11,7 @@ class Admin(commands.Cog):
         self.bot = bot
 
     # =================================================
-    # BOOTSTRAP SETUP (CRITICAL FIX)
+    # BOOTSTRAP SETUP (ENHANCED)
     # =================================================
 
     @commands.command(name="setup")
@@ -22,6 +22,7 @@ class Admin(commands.Cog):
         • Allowed for Server Owner OR Administrator
         • Creates staff roles
         • Initializes STAFF_ROLE_TIERS
+        • Creates bot-log channel
         """
 
         # ---------- PERMISSION GATE ----------
@@ -75,6 +76,37 @@ class Admin(commands.Cog):
 
             state.STAFF_ROLE_TIERS[level] = role.id
 
+        # =================================================
+        # BOT LOG CHANNEL (AUTO CREATE)
+        # =================================================
+
+        log_channel = discord.utils.get(
+            guild.text_channels,
+            name="bot-logs"
+        )
+
+        if not log_channel:
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                guild.me: discord.PermissionOverwrite(
+                    read_messages=True,
+                    send_messages=True,
+                    embed_links=True
+                )
+            }
+
+            log_channel = await guild.create_text_channel(
+                name="bot-logs",
+                overwrites=overwrites,
+                reason="HellFire Hangout • Bot logging channel"
+            )
+
+        state.BOT_LOG_CHANNEL_ID = log_channel.id
+
+        # =================================================
+        # FINAL CONFIRMATION
+        # =================================================
+
         await ctx.send(
             embed=luxury_embed(
                 title="⚙️ Initial Setup Complete",
@@ -85,7 +117,8 @@ class Admin(commands.Cog):
                     "• **Staff+** → Timeouts\n"
                     "• **Staff++** → Kicks\n"
                     "• **Staff+++** → Bans & configuration\n\n"
-                    f"{'🆕 Created Roles: ' + ', '.join(created_roles) if created_roles else '✅ All roles already existed.'}\n\n"
+                    f"{'🆕 Created Roles: ' + ', '.join(created_roles) if created_roles else '✅ All staff roles already existed.'}\n\n"
+                    f"📁 **Bot Log Channel:** {log_channel.mention}\n\n"
                     "👉 You may now assign roles and use all admin commands."
                 ),
                 color=COLOR_GOLD
