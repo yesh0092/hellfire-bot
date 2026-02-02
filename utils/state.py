@@ -91,11 +91,36 @@ STAFF_NOTES[user_id] = [
 
 
 # =================================================
-# 🛡️ SECURITY — ANTI-SPAM / RAID
+# 🛡️ SECURITY — ANTI-SPAM / AUTOMOD
 # =================================================
 
-# user_id -> list of message timestamps
+# user_id -> list of message timestamps (basic spam tracking)
 MESSAGE_HISTORY: Dict[int, List[datetime]] = {}
+
+# user_id -> last automod action timestamp
+AUTOMOD_LAST_ACTION: Dict[int, datetime] = {}
+
+# user_id -> automod strike count (for future escalation)
+AUTOMOD_STRIKES: Dict[int, int] = {}
+
+
+# =================================================
+# 🏆 ACTIVITY — WEEKLY MVP SYSTEM
+# =================================================
+
+# guild_id -> current MVP user_id
+CURRENT_TEXT_MVP: Dict[int, Optional[int]] = {}
+
+# guild_id -> last MVP rotation time
+LAST_MVP_ROTATION: Dict[int, datetime] = {}
+
+
+# =================================================
+# 📊 ACTIVITY — MESSAGE TRACKING (RUNTIME MIRROR)
+# =================================================
+
+# user_id -> messages counted this runtime (debug / future use)
+RUNTIME_MESSAGE_COUNT: Dict[int, int] = {}
 
 
 # =================================================
@@ -141,6 +166,12 @@ STAFF_ROLE_TIERS: Dict[int, Optional[int]] = {
 
 SYSTEM_FLAGS: Dict[str, bool] = {
     "panic_mode": False,
+
+    # Feature toggles (informational & future control)
+    "automod_enabled": True,
+    "mvp_system": True,
+    "profile_stats": True,
+    "message_tracking": True,
 }
 
 
