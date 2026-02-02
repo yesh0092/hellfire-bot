@@ -21,11 +21,11 @@ class System(commands.Cog):
 
         state.SYSTEM_FLAGS.setdefault("panic_mode", False)
 
-        # 🔥 Feature flags (informational)
+        # 🔥 Feature flags
         state.SYSTEM_FLAGS.setdefault("mvp_system", True)
         state.SYSTEM_FLAGS.setdefault("profile_stats", True)
         state.SYSTEM_FLAGS.setdefault("message_tracking", True)
-        state.SYSTEM_FLAGS.setdefault("silent_automod", True)
+        state.SYSTEM_FLAGS.setdefault("automod_enabled", True)
 
     # =====================================================
     # HELP (STAFF ONLY)
@@ -33,7 +33,7 @@ class System(commands.Cog):
 
     @commands.command(name="help")
     @commands.guild_only()
-    @require_level(1)  # Staff
+    @require_level(1)
     async def system_help(self, ctx: commands.Context):
         await ctx.send(
             embed=luxury_embed(
@@ -42,55 +42,32 @@ class System(commands.Cog):
                     f"**🔑 Active Prefix:** `{BOT_PREFIX}`\n\n"
 
                     "**🛎️ SUPPORT (USERS)**\n"
-                    "`support` → Open support via DM\n"
-                    "• Button-based tickets\n"
-                    "• Auto status & priority\n\n"
+                    "`support` → Open support via DM\n\n"
 
                     "**📊 USER STATS (USERS)**\n"
-                    f"`{BOT_PREFIX}profile [@user]` → View message stats\n"
+                    f"`{BOT_PREFIX}profile [@user]`\n"
                     "• Weekly message tracking\n"
                     "• Compete for **Text MVP** role\n\n"
 
-                    "**🏆 WEEKLY TEXT MVP**\n"
-                    "• Highest messages in the week wins\n"
-                    "• Role auto-rotates every week\n"
-                    "• No manual staff action required\n\n"
-
                     "**⚠️ MODERATION (STAFF)**\n"
                     f"`{BOT_PREFIX}warn @user <reason>`\n"
-                    f"`{BOT_PREFIX}unwarn @user [count]`\n"
                     f"`{BOT_PREFIX}timeout @user <minutes> <reason>`\n"
                     f"`{BOT_PREFIX}kick @user <reason>`\n"
                     f"`{BOT_PREFIX}ban @user <reason>`\n\n"
 
-                    "**👮 STAFF SYSTEM**\n"
-                    "• Role-tier enforcement\n"
-                    "• Staff notes & workload tracking\n\n"
+                    "**🛡️ AUTOMOD (STAFF+++)**\n"
+                    f"`{BOT_PREFIX}automod on`\n"
+                    f"`{BOT_PREFIX}automod off`\n"
+                    f"`{BOT_PREFIX}automod status`\n\n"
 
-                    "**🔊 VOICE PRESENCE**\n"
-                    f"`{BOT_PREFIX}setvc <voice_channel>`\n"
-                    f"`{BOT_PREFIX}unsetvc`\n"
-                    f"`{BOT_PREFIX}vcstatus`\n\n"
-
-                    "**🛡️ SECURITY & AUTOMOD**\n"
-                    "• Silent spam suppression\n"
-                    "• Panic mode escalation\n"
-                    "• Raid & invite protection\n\n"
-
-                    "**⚙️ ADMIN (STAFF+++)**\n"
-                    f"`{BOT_PREFIX}setup`\n"
-                    f"`{BOT_PREFIX}welcome` / `{BOT_PREFIX}unwelcome`\n"
-                    f"`{BOT_PREFIX}supportlog` / `{BOT_PREFIX}unsupportlog`\n"
-                    f"`{BOT_PREFIX}autorole` / `{BOT_PREFIX}unautorole`\n\n"
-
-                    "**📣 ANNOUNCEMENTS**\n"
-                    f"`{BOT_PREFIX}announce <message>`\n\n"
+                    "**🧩 ROLE MANAGEMENT (STAFF++)**\n"
+                    f"`{BOT_PREFIX}role @user @role`\n\n"
 
                     "**📊 SYSTEM**\n"
                     f"`{BOT_PREFIX}status`\n"
                     f"`{BOT_PREFIX}panic` / `{BOT_PREFIX}unpanic`\n\n"
 
-                    "_Designed for silent, luxury-grade moderation._"
+                    "_Luxury-grade, silent moderation system._"
                 ),
                 color=COLOR_GOLD
             )
@@ -115,18 +92,126 @@ class System(commands.Cog):
                     "🟢 **Bot Status:** Online\n"
                     f"⏱ **Uptime:** {h}h {m}m {s}s\n\n"
 
-                    f"🏆 **Weekly MVP System:** {'ON' if state.SYSTEM_FLAGS.get('mvp_system') else 'OFF'}\n"
+                    f"🏆 **Weekly MVP:** {'ON' if state.SYSTEM_FLAGS.get('mvp_system') else 'OFF'}\n"
                     f"📊 **Message Tracking:** {'ON' if state.SYSTEM_FLAGS.get('message_tracking') else 'OFF'}\n"
-                    f"👤 **Profile Stats:** {'ON' if state.SYSTEM_FLAGS.get('profile_stats') else 'OFF'}\n"
-                    f"🛡️ **Silent AutoMod:** {'ON' if state.SYSTEM_FLAGS.get('silent_automod') else 'OFF'}\n\n"
+                    f"🛡️ **AutoMod:** {'ON' if state.SYSTEM_FLAGS.get('automod_enabled') else 'OFF'}\n"
+                    f"🚨 **Panic Mode:** {'ON' if state.SYSTEM_FLAGS.get('panic_mode') else 'OFF'}\n\n"
 
-                    f"🚨 **Panic Mode:** {'ON' if state.SYSTEM_FLAGS.get('panic_mode') else 'OFF'}\n"
-                    f"🔊 **Voice Presence:** {'ON' if getattr(state, 'VOICE_STAY_ENABLED', False) else 'OFF'}\n"
                     f"🧠 **Loaded Cogs:** {len(self.bot.cogs)}\n"
                     f"📁 **Bot Logs:** {'Enabled' if state.BOT_LOG_CHANNEL_ID else 'Disabled'}"
                 ),
                 color=COLOR_SECONDARY
             )
+        )
+
+    # =====================================================
+    # AUTOMOD TOGGLE (STAFF+++)
+    # =====================================================
+
+    @commands.command()
+    @commands.guild_only()
+    @require_level(4)
+    async def automod(self, ctx: commands.Context, mode: str = None):
+        if not mode:
+            return await ctx.send(
+                embed=luxury_embed(
+                    title="⚙️ AutoMod Control",
+                    description=(
+                        f"`{BOT_PREFIX}automod on`\n"
+                        f"`{BOT_PREFIX}automod off`\n"
+                        f"`{BOT_PREFIX}automod status`"
+                    ),
+                    color=COLOR_SECONDARY
+                )
+            )
+
+        mode = mode.lower()
+
+        if mode == "on":
+            state.SYSTEM_FLAGS["automod_enabled"] = True
+            await ctx.send(
+                embed=luxury_embed(
+                    title="🛡️ AutoMod Enabled",
+                    description="Automatic moderation is now **ACTIVE**.",
+                    color=COLOR_GOLD
+                )
+            )
+            await self._log(ctx, "🛡️ AutoMod enabled")
+
+        elif mode == "off":
+            state.SYSTEM_FLAGS["automod_enabled"] = False
+            await ctx.send(
+                embed=luxury_embed(
+                    title="⛔ AutoMod Disabled",
+                    description="Automatic moderation is now **DISABLED**.",
+                    color=COLOR_DANGER
+                )
+            )
+            await self._log(ctx, "⛔ AutoMod disabled")
+
+        elif mode == "status":
+            enabled = state.SYSTEM_FLAGS.get("automod_enabled", True)
+            await ctx.send(
+                embed=luxury_embed(
+                    title="🛡️ AutoMod Status",
+                    description=f"**State:** {'ON ✅' if enabled else 'OFF ❌'}",
+                    color=COLOR_SECONDARY
+                )
+            )
+
+        else:
+            await ctx.send(
+                embed=luxury_embed(
+                    title="❌ Invalid Option",
+                    description="Use `on`, `off`, or `status`.",
+                    color=COLOR_DANGER
+                )
+            )
+
+    # =====================================================
+    # ROLE ASSIGNMENT (STAFF++)
+    # =====================================================
+
+    @commands.command()
+    @commands.guild_only()
+    @require_level(3)  # Staff++
+    async def role(
+        self,
+        ctx: commands.Context,
+        member: discord.Member,
+        role: discord.Role
+    ):
+        if role in member.roles:
+            return await ctx.send(
+                embed=luxury_embed(
+                    title="ℹ️ Role Already Assigned",
+                    description=f"{member.mention} already has {role.mention}.",
+                    color=COLOR_SECONDARY
+                )
+            )
+
+        try:
+            await member.add_roles(role, reason=f"Assigned by {ctx.author}")
+        except discord.Forbidden:
+            return await ctx.send(
+                embed=luxury_embed(
+                    title="❌ Permission Error",
+                    description="I cannot assign that role (check role hierarchy).",
+                    color=COLOR_DANGER
+                )
+            )
+
+        await ctx.send(
+            embed=luxury_embed(
+                title="✅ Role Assigned",
+                description=f"{role.mention} has been given to {member.mention}.",
+                color=COLOR_GOLD
+            )
+        )
+
+        await self._log(
+            ctx,
+            f"🏷️ Role **{role.name}** assigned to {member.mention}"
         )
 
     # =====================================================
@@ -142,11 +227,7 @@ class System(commands.Cog):
         await ctx.send(
             embed=luxury_embed(
                 title="🚨 PANIC MODE ENABLED",
-                description=(
-                    "High-risk protections are now active.\n\n"
-                    "• Aggressive spam limits\n"
-                    "• Elevated moderation sensitivity"
-                ),
+                description="Aggressive protection is now active.",
                 color=COLOR_DANGER
             )
         )
@@ -162,7 +243,7 @@ class System(commands.Cog):
         await ctx.send(
             embed=luxury_embed(
                 title="✅ Panic Mode Disabled",
-                description="All systems restored to normal operation.",
+                description="System returned to normal operation.",
                 color=COLOR_GOLD
             )
         )
