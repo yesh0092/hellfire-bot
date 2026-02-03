@@ -1,15 +1,36 @@
 import time
+import re
 import discord
 from discord.ext import commands
 from utils import state
 
-TIMEOUT_SECONDS = 300  # 5 minutes
+# =====================================================
+# CONFIGURATION
+# =====================================================
+
+SPAM_WINDOW = 6
+SPAM_LIMIT_NORMAL = 6
+SPAM_LIMIT_PANIC = 4
+
+CAPS_RATIO_LIMIT = 0.7
+CAPS_MIN_LEN = 8
+
+DUPLICATE_LIMIT = 3
+MENTION_LIMIT = 5
+EMOJI_LIMIT = 8
+
+TIMEOUT_TIERS = [
+    300,    # 5 min
+    1800,   # 30 min
+    86400,  # 24 hours
+]
 
 
 class SilentAutoMod(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.cache = {}
+        self.violations = {}
 
     # =====================================================
     # MESSAGE LISTENER
@@ -20,9 +41,12 @@ class SilentAutoMod(commands.Cog):
         if message.author.bot or not message.guild:
             return
 
+        if not state.SYSTEM_FLAGS.get("automod_enabled", True):
+            return
+
         member = message.author
 
-        # Ignore admins & staff
+        # Ignore staff & admins
         if member.guild_permissions.manage_messages:
             return
 
@@ -30,68 +54,114 @@ class SilentAutoMod(commands.Cog):
         now = time.time()
 
         self.cache.setdefault(uid, [])
-        self.cache[uid].append(now)
+        self.cache[uid].append((now, message.content))
 
-        # Keep only last 6 seconds
+        # Keep recent messages only
         self.cache[uid] = [
-            t for t in self.cache[uid] if now - t < 6
+            (t, c) for t, c in self.cache[uid] if now - t < SPAM_WINDOW
         ]
 
         # ==========================
-        # RULE: MESSAGE SPAM
+        # RULE 1: MESSAGE SPAM
         # ==========================
-        limit = 5 if state.SYSTEM_FLAGS.get("panic_mode") else 6
-
+        limit = SPAM_LIMIT_PANIC if state.SYSTEM_FLAGS.get("panic_mode") else SPAM_LIMIT_NORMAL
         if len(self.cache[uid]) >= limit:
-            await self._punish(
-                member,
-                message,
-                "Spamming messages rapidly"
-            )
+            return await self._violate(member, message, "Message spam")
+
+        # ==========================
+        # RULE 2: DUPLICATE SPAM
+        # ==========================
+        contents = [c for _, c in self.cache[uid]]
+        if contents.count(message.content) >= DUPLICATE_LIMIT:
+            return await self._violate(member, message, "Repeated messages")
+
+        # ==========================
+        # RULE 3: CAPS ABUSE
+        # ==========================
+        if len(message.content) >= CAPS_MIN_LEN:
+            ratio = sum(1 for c in message.content if c.isupper()) / len(message.content)
+            if ratio >= CAPS_RATIO_LIMIT:
+                return await self._violate(member, message, "Excessive capital letters")
+
+        # ==========================
+        # RULE 4: MASS MENTIONS
+        # ==========================
+        if len(message.mentions) >= MENTION_LIMIT:
+            return await self._violate(member, message, "Mass mentions")
+
+        # ==========================
+        # RULE 5: EMOJI SPAM
+        # ==========================
+        emojis = re.findall(r"<a?:\w+:\d+>|[\U0001F300-\U0001FAFF]", message.content)
+        if len(emojis) >= EMOJI_LIMIT:
+            return await self._violate(member, message, "Emoji spam")
 
     # =====================================================
-    # PUNISHMENT HANDLER
+    # VIOLATION HANDLER
     # =====================================================
 
-    async def _punish(self, member: discord.Member, message: discord.Message, reason: str):
-        # Delete message silently
+    async def _violate(self, member: discord.Member, message: discord.Message, reason: str):
+        uid = member.id
+        self.violations[uid] = self.violations.get(uid, 0) + 1
+        strikes = self.violations[uid]
+
+        # Delete message
         try:
             await message.delete()
-        except (discord.Forbidden, discord.HTTPException):
+        except:
             pass
 
-        # Apply timeout
+        # Determine punishment
+        if strikes == 1:
+            await self._warn(member, reason)
+        else:
+            tier = min(strikes - 2, len(TIMEOUT_TIERS) - 1)
+            await self._timeout(member, TIMEOUT_TIERS[tier], reason)
+
+        await self._log(member, reason, strikes)
+
+        # Reset cache to prevent loops
+        self.cache.pop(uid, None)
+
+    # =====================================================
+    # ACTIONS
+    # =====================================================
+
+    async def _warn(self, member: discord.Member, reason: str):
         try:
-            until = discord.utils.utcnow() + discord.timedelta(seconds=TIMEOUT_SECONDS)
+            await member.send(
+                f"⚠️ **AutoMod Warning**\n\n"
+                f"**Reason:** {reason}\n\n"
+                "Further violations will result in timeouts."
+            )
+        except:
+            pass
+
+    async def _timeout(self, member: discord.Member, seconds: int, reason: str):
+        try:
+            until = discord.utils.utcnow() + discord.timedelta(seconds=seconds)
             await member.edit(
                 timed_out_until=until,
                 reason=f"AutoMod: {reason}"
             )
-        except (discord.Forbidden, discord.HTTPException):
+        except:
             return
 
-        # DM user
         try:
             await member.send(
-                "⛔ **You have been timed out for 5 minutes**\n\n"
-                f"**Reason:** {reason}\n\n"
-                "Please follow the server rules to avoid further action."
+                f"⛔ **You have been timed out**\n\n"
+                f"⏱ **Duration:** {seconds // 60} minutes\n"
+                f"📄 **Reason:** {reason}"
             )
-        except discord.Forbidden:
+        except:
             pass
 
-        # Log to bot logs
-        await self._log_action(member, reason)
-
-        # Clear cache so it doesn’t re-trigger instantly
-        self.cache.pop(member.id, None)
-
     # =====================================================
-    # BOT LOGGING
+    # LOGGING
     # =====================================================
 
-    async def _log_action(self, member: discord.Member, reason: str):
-        if not getattr(state, "BOT_LOG_CHANNEL_ID", None):
+    async def _log(self, member: discord.Member, reason: str, strikes: int):
+        if not state.BOT_LOG_CHANNEL_ID:
             return
 
         channel = member.guild.get_channel(state.BOT_LOG_CHANNEL_ID)
@@ -99,18 +169,18 @@ class SilentAutoMod(commands.Cog):
             return
 
         embed = discord.Embed(
-            title="🛡️ AutoMod Timeout",
+            title="🛡️ AutoMod Action",
             description=(
                 f"**User:** {member.mention}\n"
-                f"**Action:** Timeout (5 minutes)\n"
-                f"**Reason:** {reason}"
+                f"**Reason:** {reason}\n"
+                f"**Strikes:** {strikes}"
             ),
             color=0x7c2d12
         )
 
         try:
             await channel.send(embed=embed)
-        except (discord.Forbidden, discord.HTTPException):
+        except:
             pass
 
 
