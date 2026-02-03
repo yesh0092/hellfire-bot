@@ -16,14 +16,13 @@ from utils import state
 WARN_TIMEOUT_THRESHOLD = 3
 WARN_KICK_THRESHOLD = 5
 
-TIMEOUT_DURATION_MIN = 1440        # 24h (warn escalation)
+TIMEOUT_DURATION_MIN = 1440        # 24h escalation
 SPAM_TIMEOUT_MIN = 5               # spam timeout
 SPAM_WINDOW_SEC = 6
 SPAM_LIMIT_NORMAL = 6
 SPAM_LIMIT_PANIC = 4
 
 SPAM_COOLDOWN = 30                 # prevents loops
-WARN_DECAY_TIME = 3600             # 1h forgiveness
 
 
 class Moderation(commands.Cog):
@@ -31,6 +30,15 @@ class Moderation(commands.Cog):
         self.bot = bot
         self.spam_cache: dict[int, list[float]] = {}
         self.last_spam_action: dict[int, float] = {}
+
+        # =================================================
+        # HARDEN STATE (CRITICAL FIX)
+        # =================================================
+        if not hasattr(state, "WARN_DATA"):
+            state.WARN_DATA = {}
+
+        if not hasattr(state, "WARN_LOGS"):
+            state.WARN_LOGS = {}
 
     # =====================================================
     # INTERNAL HELPERS
@@ -53,23 +61,26 @@ class Moderation(commands.Cog):
     async def _safe_dm(self, member, embed):
         try:
             await member.send(embed=embed)
-        except:
+        except (discord.Forbidden, discord.HTTPException):
             pass
 
     async def _log(self, ctx, title, description, color=COLOR_SECONDARY):
-        if not state.BOT_LOG_CHANNEL_ID or not ctx:
+        if not ctx or not state.BOT_LOG_CHANNEL_ID:
             return
+
         channel = ctx.guild.get_channel(state.BOT_LOG_CHANNEL_ID)
-        if channel:
-            try:
-                await channel.send(
-                    embed=luxury_embed(title=title, description=description, color=color)
-                )
-            except:
-                pass
+        if not channel:
+            return
+
+        try:
+            await channel.send(
+                embed=luxury_embed(title=title, description=description, color=color)
+            )
+        except (discord.Forbidden, discord.HTTPException):
+            pass
 
     # =====================================================
-    # AUTOMATIC SPAM PROTECTION (ULTIMATE)
+    # AUTOMATIC SPAM PROTECTION (SILENT)
     # =====================================================
 
     @commands.Cog.listener()
@@ -120,7 +131,7 @@ class Moderation(commands.Cog):
             self.spam_cache.pop(uid, None)
 
     # =====================================================
-    # WARN SYSTEM (SMART ESCALATION)
+    # WARN SYSTEM
     # =====================================================
 
     @commands.command()
@@ -137,15 +148,13 @@ class Moderation(commands.Cog):
             )
 
         uid = member.id
-        now = datetime.utcnow()
-
         state.WARN_DATA[uid] = state.WARN_DATA.get(uid, 0) + 1
         warns = state.WARN_DATA[uid]
 
         state.WARN_LOGS.setdefault(uid, []).append({
             "reason": reason,
             "by": ctx.author.id,
-            "time": now
+            "time": datetime.utcnow()
         })
 
         await self._safe_dm(
@@ -181,6 +190,7 @@ class Moderation(commands.Cog):
                 TIMEOUT_DURATION_MIN,
                 "Automatic timeout due to repeated warnings"
             )
+
         elif warns >= WARN_KICK_THRESHOLD:
             await self._apply_kick(
                 ctx,
@@ -189,8 +199,14 @@ class Moderation(commands.Cog):
             )
 
     # =====================================================
-    # TIMEOUT / KICK / BAN (CLEAN)
+    # TIMEOUT COMMAND
     # =====================================================
+
+    @commands.command()
+    @commands.guild_only()
+    @require_level(2)
+    async def timeout(self, ctx, member: discord.Member, minutes: int, *, reason="No reason provided"):
+        await self._apply_timeout(ctx, member, minutes, reason)
 
     async def _apply_timeout(self, ctx, member, minutes, reason, silent=False):
         bot = self._bot_member(member.guild)
@@ -217,8 +233,24 @@ class Moderation(commands.Cog):
                 )
             )
 
+        await self._log(
+            ctx,
+            "⏳ Timeout Applied",
+            f"{member.mention}\nDuration: {minutes} min\nReason: {reason}"
+        )
+
+    # =====================================================
+    # KICK COMMAND
+    # =====================================================
+
+    @commands.command()
+    @commands.guild_only()
+    @require_level(3)
+    async def kick(self, ctx, member: discord.Member, *, reason="No reason provided"):
+        await self._apply_kick(ctx, member, reason)
+
     async def _apply_kick(self, ctx, member, reason):
-        bot = self._bot_member(member.guild)
+        bot = self._bot_member(ctx.guild)
         if not bot or not bot.guild_permissions.kick_members:
             return
 
@@ -233,14 +265,23 @@ class Moderation(commands.Cog):
 
         await member.kick(reason=reason)
 
-        if ctx:
-            await ctx.send(
-                embed=luxury_embed(
-                    title="👢 Member Kicked",
-                    description=f"{member.mention} has been kicked.",
-                    color=COLOR_GOLD
-                )
+        await ctx.send(
+            embed=luxury_embed(
+                title="👢 Member Kicked",
+                description=f"{member.mention} has been kicked.",
+                color=COLOR_GOLD
             )
+        )
+
+        await self._log(
+            ctx,
+            "👢 Member Kicked",
+            f"{member.mention}\nReason: {reason}"
+        )
+
+    # =====================================================
+    # BAN COMMAND
+    # =====================================================
 
     @commands.command()
     @commands.guild_only()
@@ -267,6 +308,12 @@ class Moderation(commands.Cog):
                 description=f"{member.mention} has been banned.",
                 color=COLOR_GOLD
             )
+        )
+
+        await self._log(
+            ctx,
+            "⛔ Member Banned",
+            f"{member.mention}\nReason: {reason}"
         )
 
 
