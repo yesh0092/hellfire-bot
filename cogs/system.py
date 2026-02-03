@@ -19,55 +19,124 @@ class System(commands.Cog):
         if not hasattr(state, "SYSTEM_FLAGS"):
             state.SYSTEM_FLAGS = {}
 
+        # =========================
+        # CORE SYSTEM FLAGS
+        # =========================
         state.SYSTEM_FLAGS.setdefault("panic_mode", False)
+        state.SYSTEM_FLAGS.setdefault("automod_enabled", True)
 
-        # 🔥 Feature flags
+        # =========================
+        # FEATURE FLAGS (INFO ONLY)
+        # =========================
         state.SYSTEM_FLAGS.setdefault("mvp_system", True)
         state.SYSTEM_FLAGS.setdefault("profile_stats", True)
         state.SYSTEM_FLAGS.setdefault("message_tracking", True)
-        state.SYSTEM_FLAGS.setdefault("automod_enabled", True)
 
     # =====================================================
-    # HELP (STAFF ONLY)
+    # HELP / FEATURE GUIDE (STAFF)
     # =====================================================
 
     @commands.command(name="help")
     @commands.guild_only()
     @require_level(1)
     async def system_help(self, ctx: commands.Context):
+        """
+        Complete feature & usage documentation
+        """
         await ctx.send(
             embed=luxury_embed(
-                title="🌙 HellFire Hangout — Command Codex",
+                title="🌙 HellFire Hangout — System Codex",
                 description=(
-                    f"**🔑 Active Prefix:** `{BOT_PREFIX}`\n\n"
 
-                    "**🛎️ SUPPORT (USERS)**\n"
-                    "`support` → Open support via DM\n\n"
+                    f"**🔑 PREFIX**\n"
+                    f"`{BOT_PREFIX}` is the global command prefix\n\n"
 
-                    "**📊 USER STATS (USERS)**\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "**🛎️ SUPPORT SYSTEM (USERS)**\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "`support`\n"
+                    "• Opens support in DM\n"
+                    "• One ticket per user\n"
+                    "• Logged to support-log channel\n\n"
+
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "**📊 USER PROFILE & STATS**\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"`{BOT_PREFIX}profile [@user]`\n"
-                    "• Weekly message tracking\n"
-                    "• Compete for **Text MVP** role\n\n"
+                    "• Shows weekly message count\n"
+                    "• Displays activity ranking\n"
+                    "• Anyone can use this command\n\n"
 
-                    "**⚠️ MODERATION (STAFF)**\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "**🏆 WEEKLY TEXT MVP SYSTEM**\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "• Tracks weekly messages automatically\n"
+                    "• Top chatter receives **Text MVP** role\n"
+                    "• Role rotates every week\n"
+                    "• Fully automatic (no staff action)\n\n"
+
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "**⚠️ MODERATION COMMANDS (STAFF)**\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"`{BOT_PREFIX}warn @user <reason>`\n"
-                    f"`{BOT_PREFIX}timeout @user <minutes> <reason>`\n"
-                    f"`{BOT_PREFIX}kick @user <reason>`\n"
-                    f"`{BOT_PREFIX}ban @user <reason>`\n\n"
+                    "• Issues a warning\n"
+                    "• Warnings auto-escalate\n\n"
 
-                    "**🛡️ AUTOMOD (STAFF+++)**\n"
+                    f"`{BOT_PREFIX}timeout @user <minutes> <reason>`\n"
+                    "• Temporarily mutes a user\n\n"
+
+                    f"`{BOT_PREFIX}kick @user <reason>`\n"
+                    "• Removes user from server\n\n"
+
+                    f"`{BOT_PREFIX}ban @user <reason>`\n"
+                    "• Permanently bans user\n\n"
+
+                    "⚙️ **Auto Escalation Rules:**\n"
+                    "• 3 warnings → 24h timeout\n"
+                    "• 5 warnings → auto kick\n\n"
+
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "**🛡️ AUTOMOD SYSTEM (SILENT)**\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "• Detects message spam\n"
+                    "• No slowmode used\n"
+                    "• Applies user-level timeouts\n"
+                    "• DM warning → timeout → escalation\n\n"
+
                     f"`{BOT_PREFIX}automod on`\n"
                     f"`{BOT_PREFIX}automod off`\n"
                     f"`{BOT_PREFIX}automod status`\n\n"
 
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
                     "**🧩 ROLE MANAGEMENT (STAFF++)**\n"
-                    f"`{BOT_PREFIX}role @user @role`\n\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"`{BOT_PREFIX}role @user @role`\n"
+                    "• Assigns a role manually\n"
+                    "• Respects role hierarchy\n\n"
 
-                    "**📊 SYSTEM**\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "**🚨 PANIC MODE (STAFF+++)**\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"`{BOT_PREFIX}panic`\n"
+                    "• Tightens spam thresholds\n"
+                    "• Aggressive protection\n\n"
+
+                    f"`{BOT_PREFIX}unpanic`\n"
+                    "• Restores normal operation\n\n"
+
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "**📊 SYSTEM STATUS & LOGS**\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"`{BOT_PREFIX}status`\n"
-                    f"`{BOT_PREFIX}panic` / `{BOT_PREFIX}unpanic`\n\n"
+                    "• Bot uptime\n"
+                    "• Feature states\n"
+                    "• Loaded systems\n\n"
 
-                    "_Luxury-grade, silent moderation system._"
+                    "📁 **Bot Logs**\n"
+                    "• All actions logged silently\n"
+                    "• Visible only to staff\n\n"
+
+                    "_Luxury-grade, silent, enterprise moderation system._"
                 ),
                 color=COLOR_GOLD
             )
@@ -129,93 +198,39 @@ class System(commands.Cog):
 
         if mode == "on":
             state.SYSTEM_FLAGS["automod_enabled"] = True
-            await ctx.send(
-                embed=luxury_embed(
-                    title="🛡️ AutoMod Enabled",
-                    description="Automatic moderation is now **ACTIVE**.",
-                    color=COLOR_GOLD
-                )
-            )
+            await ctx.send(luxury_embed(
+                title="🛡️ AutoMod Enabled",
+                description="Automatic moderation is now active.",
+                color=COLOR_GOLD
+            ))
             await self._log(ctx, "🛡️ AutoMod enabled")
 
         elif mode == "off":
             state.SYSTEM_FLAGS["automod_enabled"] = False
-            await ctx.send(
-                embed=luxury_embed(
-                    title="⛔ AutoMod Disabled",
-                    description="Automatic moderation is now **DISABLED**.",
-                    color=COLOR_DANGER
-                )
-            )
+            await ctx.send(luxury_embed(
+                title="⛔ AutoMod Disabled",
+                description="Automatic moderation is now disabled.",
+                color=COLOR_DANGER
+            ))
             await self._log(ctx, "⛔ AutoMod disabled")
 
         elif mode == "status":
             enabled = state.SYSTEM_FLAGS.get("automod_enabled", True)
-            await ctx.send(
-                embed=luxury_embed(
-                    title="🛡️ AutoMod Status",
-                    description=f"**State:** {'ON ✅' if enabled else 'OFF ❌'}",
-                    color=COLOR_SECONDARY
-                )
-            )
+            await ctx.send(luxury_embed(
+                title="🛡️ AutoMod Status",
+                description=f"State: {'ON ✅' if enabled else 'OFF ❌'}",
+                color=COLOR_SECONDARY
+            ))
 
         else:
-            await ctx.send(
-                embed=luxury_embed(
-                    title="❌ Invalid Option",
-                    description="Use `on`, `off`, or `status`.",
-                    color=COLOR_DANGER
-                )
-            )
+            await ctx.send(luxury_embed(
+                title="❌ Invalid Option",
+                description="Use `on`, `off`, or `status`.",
+                color=COLOR_DANGER
+            ))
 
     # =====================================================
-    # ROLE ASSIGNMENT (STAFF++)
-    # =====================================================
-
-    @commands.command()
-    @commands.guild_only()
-    @require_level(3)  # Staff++
-    async def role(
-        self,
-        ctx: commands.Context,
-        member: discord.Member,
-        role: discord.Role
-    ):
-        if role in member.roles:
-            return await ctx.send(
-                embed=luxury_embed(
-                    title="ℹ️ Role Already Assigned",
-                    description=f"{member.mention} already has {role.mention}.",
-                    color=COLOR_SECONDARY
-                )
-            )
-
-        try:
-            await member.add_roles(role, reason=f"Assigned by {ctx.author}")
-        except discord.Forbidden:
-            return await ctx.send(
-                embed=luxury_embed(
-                    title="❌ Permission Error",
-                    description="I cannot assign that role (check role hierarchy).",
-                    color=COLOR_DANGER
-                )
-            )
-
-        await ctx.send(
-            embed=luxury_embed(
-                title="✅ Role Assigned",
-                description=f"{role.mention} has been given to {member.mention}.",
-                color=COLOR_GOLD
-            )
-        )
-
-        await self._log(
-            ctx,
-            f"🏷️ Role **{role.name}** assigned to {member.mention}"
-        )
-
-    # =====================================================
-    # PANIC MODE (STAFF+++)
+    # PANIC MODE
     # =====================================================
 
     @commands.command()
@@ -223,15 +238,11 @@ class System(commands.Cog):
     @require_level(4)
     async def panic(self, ctx: commands.Context):
         state.SYSTEM_FLAGS["panic_mode"] = True
-
-        await ctx.send(
-            embed=luxury_embed(
-                title="🚨 PANIC MODE ENABLED",
-                description="Aggressive protection is now active.",
-                color=COLOR_DANGER
-            )
-        )
-
+        await ctx.send(luxury_embed(
+            title="🚨 PANIC MODE ENABLED",
+            description="Aggressive protection is now active.",
+            color=COLOR_DANGER
+        ))
         await self._log(ctx, "🚨 Panic mode enabled")
 
     @commands.command()
@@ -239,15 +250,11 @@ class System(commands.Cog):
     @require_level(4)
     async def unpanic(self, ctx: commands.Context):
         state.SYSTEM_FLAGS["panic_mode"] = False
-
-        await ctx.send(
-            embed=luxury_embed(
-                title="✅ Panic Mode Disabled",
-                description="System returned to normal operation.",
-                color=COLOR_GOLD
-            )
-        )
-
+        await ctx.send(luxury_embed(
+            title="✅ Panic Mode Disabled",
+            description="System returned to normal operation.",
+            color=COLOR_GOLD
+        ))
         await self._log(ctx, "✅ Panic mode disabled")
 
     # =====================================================
