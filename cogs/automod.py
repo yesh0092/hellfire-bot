@@ -25,12 +25,16 @@ TIMEOUT_TIERS = [
     86400,  # 24 hours
 ]
 
+POST_ACTION_COOLDOWN = 30     # seconds (prevents loop)
+STRIKE_DECAY_TIME = 1800      # 30 min decay
+
 
 class SilentAutoMod(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.cache = {}
         self.violations = {}
+        self.last_action = {}
 
     # =====================================================
     # MESSAGE LISTENER
@@ -46,17 +50,30 @@ class SilentAutoMod(commands.Cog):
 
         member = message.author
 
-        # Ignore staff & admins
+        # Ignore staff/admin
         if member.guild_permissions.manage_messages:
+            return
+
+        # 🚫 Ignore if already timed out
+        if member.is_timed_out():
             return
 
         uid = member.id
         now = time.time()
 
+        # ⏳ Grace period after punishment
+        if uid in self.last_action and now - self.last_action[uid] < POST_ACTION_COOLDOWN:
+            return
+
+        # 🧠 Strike decay
+        if uid in self.violations:
+            last = self.last_action.get(uid, now)
+            if now - last > STRIKE_DECAY_TIME:
+                self.violations[uid] = max(0, self.violations[uid] - 1)
+
         self.cache.setdefault(uid, [])
         self.cache[uid].append((now, message.content))
 
-        # Keep recent messages only
         self.cache[uid] = [
             (t, c) for t, c in self.cache[uid] if now - t < SPAM_WINDOW
         ]
@@ -102,16 +119,18 @@ class SilentAutoMod(commands.Cog):
 
     async def _violate(self, member: discord.Member, message: discord.Message, reason: str):
         uid = member.id
+        now = time.time()
+
         self.violations[uid] = self.violations.get(uid, 0) + 1
         strikes = self.violations[uid]
 
-        # Delete message
+        self.last_action[uid] = now
+
         try:
             await message.delete()
         except:
             pass
 
-        # Determine punishment
         if strikes == 1:
             await self._warn(member, reason)
         else:
@@ -120,7 +139,6 @@ class SilentAutoMod(commands.Cog):
 
         await self._log(member, reason, strikes)
 
-        # Reset cache to prevent loops
         self.cache.pop(uid, None)
 
     # =====================================================
@@ -130,9 +148,9 @@ class SilentAutoMod(commands.Cog):
     async def _warn(self, member: discord.Member, reason: str):
         try:
             await member.send(
-                f"⚠️ **AutoMod Warning**\n\n"
+                "⚠️ **AutoMod Warning**\n\n"
                 f"**Reason:** {reason}\n\n"
-                "Further violations will result in timeouts."
+                "Please slow down. Continued violations will result in timeouts."
             )
         except:
             pass
@@ -149,9 +167,10 @@ class SilentAutoMod(commands.Cog):
 
         try:
             await member.send(
-                f"⛔ **You have been timed out**\n\n"
+                "⛔ **You have been timed out**\n\n"
                 f"⏱ **Duration:** {seconds // 60} minutes\n"
-                f"📄 **Reason:** {reason}"
+                f"📄 **Reason:** {reason}\n\n"
+                "This is NOT slowmode. Please wait for the timeout to end."
             )
         except:
             pass
