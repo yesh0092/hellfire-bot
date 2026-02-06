@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands, tasks
+
 from utils.embeds import luxury_embed
 from utils.permissions import require_level
 from utils.config import COLOR_GOLD, COLOR_SECONDARY, COLOR_DANGER
@@ -10,13 +11,17 @@ class VoiceSystem(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-        # NEVER overwrite existing state
+        # ===============================
+        # HARDENED STATE (NO OVERWRITE)
+        # ===============================
         state.VOICE_STAY_ENABLED = getattr(state, "VOICE_STAY_ENABLED", False)
         state.VOICE_CHANNEL_ID = getattr(state, "VOICE_CHANNEL_ID", None)
         state.MAIN_GUILD_ID = getattr(state, "MAIN_GUILD_ID", None)
 
+        self._last_attempt = 0  # anti-spam reconnect guard
+
     # =====================================================
-    # STARTUP
+    # LIFECYCLE
     # =====================================================
 
     async def cog_load(self):
@@ -33,7 +38,7 @@ class VoiceSystem(commands.Cog):
         if not state.VOICE_STAY_ENABLED:
             return
 
-        if not state.VOICE_CHANNEL_ID or not state.MAIN_GUILD_ID:
+        if not state.MAIN_GUILD_ID or not state.VOICE_CHANNEL_ID:
             return
 
         guild = self.bot.get_guild(state.MAIN_GUILD_ID)
@@ -48,16 +53,21 @@ class VoiceSystem(commands.Cog):
         if not isinstance(channel, discord.VoiceChannel):
             return
 
-        if not channel.permissions_for(bot_member).connect:
-            print("[VOICE] Missing connect permission")
+        perms = channel.permissions_for(bot_member)
+        if not perms.connect:
+            print("[VOICE] Missing CONNECT permission")
             return
 
+        now = discord.utils.utcnow().timestamp()
+        if now - self._last_attempt < 10:
+            return
+
+        self._last_attempt = now
         vc = guild.voice_client
 
         try:
-            # Not connected
+            # ---------------- NOT CONNECTED ----------------
             if not vc or not vc.is_connected():
-                print("[VOICE] Connecting to voice channel...")
                 await channel.connect(
                     self_mute=True,
                     self_deaf=True,
@@ -65,9 +75,8 @@ class VoiceSystem(commands.Cog):
                 )
                 return
 
-            # Connected to wrong channel
+            # ---------------- WRONG CHANNEL ----------------
             if vc.channel.id != channel.id:
-                print("[VOICE] Reconnecting to correct channel...")
                 await vc.disconnect(force=True)
                 await channel.connect(
                     self_mute=True,
@@ -79,7 +88,7 @@ class VoiceSystem(commands.Cog):
             print("[VOICE ERROR]", repr(e))
 
     # =====================================================
-    # AUTO REJOIN LOOP (24/7)
+    # AUTO GUARD (24/7 PRESENCE)
     # =====================================================
 
     @tasks.loop(seconds=20)
@@ -89,6 +98,19 @@ class VoiceSystem(commands.Cog):
     @voice_guard.before_loop
     async def before_voice_guard(self):
         await self.bot.wait_until_ready()
+
+    # =====================================================
+    # EVENT SAFETY (KICKS / MOVES / DC)
+    # =====================================================
+
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member, before, after):
+        if not member.bot or member.id != self.bot.user.id:
+            return
+
+        # Bot got disconnected
+        if before.channel and not after.channel:
+            await self.ensure_voice_connection()
 
     # =====================================================
     # SET VOICE CHANNEL
@@ -119,11 +141,12 @@ class VoiceSystem(commands.Cog):
             embed=luxury_embed(
                 title="🔊 Voice System Activated",
                 description=(
-                    f"🎧 **Channel:** {channel.name}\n\n"
+                    f"🎧 **Channel:** {channel.mention}\n\n"
                     "• 24/7 presence enabled\n"
                     "• Auto-rejoin active\n"
                     "• Mic muted\n"
-                    "• Deafened"
+                    "• Deafened\n"
+                    "• Crash recovery enabled"
                 ),
                 color=COLOR_GOLD
             )
@@ -141,7 +164,10 @@ class VoiceSystem(commands.Cog):
 
         vc = ctx.guild.voice_client
         if vc:
-            await vc.disconnect(force=True)
+            try:
+                await vc.disconnect(force=True)
+            except:
+                pass
 
         await ctx.send(
             embed=luxury_embed(
@@ -169,12 +195,14 @@ class VoiceSystem(commands.Cog):
             )
 
         channel = ctx.guild.get_channel(state.VOICE_CHANNEL_ID)
+        vc = ctx.guild.voice_client
 
         await ctx.send(
             embed=luxury_embed(
                 title="🔊 Voice System Online",
                 description=(
-                    f"🎧 **Channel:** {channel.name if channel else 'Unknown'}\n"
+                    f"🎧 **Channel:** {channel.mention if channel else 'Unknown'}\n"
+                    f"🔗 **Connected:** {'Yes' if vc and vc.is_connected() else 'No'}\n"
                     "🔁 Auto-rejoin: Enabled\n"
                     "🎙️ Mic: Muted\n"
                     "🔇 Deafened: Yes\n"
