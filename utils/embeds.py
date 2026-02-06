@@ -1,33 +1,52 @@
 import discord
 from datetime import datetime
-from utils.config import COLOR_PRIMARY
+from typing import Optional
+
+from utils.config import (
+    COLOR_PRIMARY,
+    COLOR_SECONDARY,
+    COLOR_GOLD,
+    COLOR_DANGER
+)
 
 # =====================================================
-# GLOBAL BRANDING
+# 🔱 GLOBAL BRANDING (SINGLE SOURCE)
 # =====================================================
 
-DEFAULT_FOOTER = "🔥 HellFire Hangout | Elite Support Services | Premium Automation"
+BRAND_NAME = "HellFire Hangout"
+BRAND_TAGLINE = "Elite Automation • Silent Power • Anime Authority"
+
+DEFAULT_FOOTER = f"🔥 {BRAND_NAME} | {BRAND_TAGLINE}"
+DEFAULT_ICON = None  # You can later put a CDN / GitHub raw image URL
 
 
 # =====================================================
-# LUXURY EMBED FACTORY
+# 🧠 CORE LUXURY EMBED FACTORY
 # =====================================================
 
 def luxury_embed(
-    title: str | None = None,
-    description: str | None = None,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
     *,
     color: int = COLOR_PRIMARY,
-    footer: str = DEFAULT_FOOTER,
-    timestamp: bool = True
+    footer: Optional[str] = DEFAULT_FOOTER,
+    footer_icon: Optional[str] = DEFAULT_ICON,
+    timestamp: bool = True,
+    thumbnail: Optional[str] = None,
+    image: Optional[str] = None,
+    author: Optional[str] = None,
+    author_icon: Optional[str] = None
 ) -> discord.Embed:
     """
-    Creates a premium-styled embed used across the entire bot.
+    🔥 Universal embed factory used across the entire bot.
 
-    Backward compatible with all existing calls.
+    ✅ Backward compatible
+    ✅ Anime-theme ready
+    ✅ Safe (Discord limits)
+    ✅ Centralized branding
     """
 
-    # Discord safety: at least something must exist
+    # Discord requires at least one visible field
     if not title and not description:
         description = "\u200b"
 
@@ -38,35 +57,120 @@ def luxury_embed(
         timestamp=datetime.utcnow() if timestamp else None
     )
 
+    # ---------- AUTHOR ----------
+    if author:
+        embed.set_author(
+            name=author,
+            icon_url=author_icon or DEFAULT_ICON
+        )
+
+    # ---------- THUMBNAIL ----------
+    if thumbnail:
+        embed.set_thumbnail(url=thumbnail)
+
+    # ---------- IMAGE ----------
+    if image:
+        embed.set_image(url=image)
+
+    # ---------- FOOTER ----------
     if footer:
-        embed.set_footer(text=footer)
+        embed.set_footer(
+            text=footer,
+            icon_url=footer_icon
+        )
 
     return embed
 
 
 # =====================================================
-# OPTIONAL HELPERS (NON-BREAKING)
+# 🎭 SPECIALIZED EMBED VARIANTS (NON-BREAKING)
 # =====================================================
 
-def staff_embed(title: str, description: str, color: int = COLOR_PRIMARY) -> discord.Embed:
+def staff_embed(
+    title: str,
+    description: str,
+    *,
+    color: int = COLOR_GOLD
+) -> discord.Embed:
     """
-    Embed variant for staff-only messages.
+    👮 Staff-only actions, warnings, moderation logs
     """
     return luxury_embed(
         title=title,
         description=description,
         color=color,
-        footer="👮 Staff System | HellFire Hangout"
+        footer="👮 Staff System • HellFire Hangout"
     )
 
 
-def system_embed(title: str, description: str, color: int = COLOR_PRIMARY) -> discord.Embed:
+def system_embed(
+    title: str,
+    description: str,
+    *,
+    color: int = COLOR_SECONDARY
+) -> discord.Embed:
     """
-    Embed variant for system / automation logs.
+    ⚙️ System / automation / background logs
     """
     return luxury_embed(
         title=title,
         description=description,
         color=color,
-        footer="⚙️ System Automation | HellFire Hangout"
+        footer="⚙️ System Core • HellFire Hangout"
+    )
+
+
+def danger_embed(
+    title: str,
+    description: str
+) -> discord.Embed:
+    """
+    ⛔ Errors, bans, critical actions
+    """
+    return luxury_embed(
+        title=title,
+        description=description,
+        color=COLOR_DANGER,
+        footer="⛔ Security & Enforcement • HellFire Hangout"
+    )
+
+
+def profile_embed(
+    user: discord.Member,
+    title: str,
+    description: str
+) -> discord.Embed:
+    """
+    🧬 Profile / stats / economy embeds
+    """
+    return luxury_embed(
+        title=title,
+        description=description,
+        color=COLOR_GOLD,
+        thumbnail=user.display_avatar.url,
+        footer=f"🧬 Profile System • {BRAND_NAME}"
+    )
+
+
+# =====================================================
+# 🛡️ QUICK FIELD HELPER (OPTIONAL)
+# =====================================================
+
+def add_field_safe(
+    embed: discord.Embed,
+    *,
+    name: str,
+    value: str,
+    inline: bool = False
+):
+    """
+    Safely adds a field without breaking Discord limits.
+    """
+    if len(embed.fields) >= 25:
+        return
+
+    embed.add_field(
+        name=name[:256],
+        value=value[:1024],
+        inline=inline
     )
