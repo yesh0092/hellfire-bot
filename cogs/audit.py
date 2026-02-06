@@ -4,20 +4,63 @@ from discord.ext import commands
 from datetime import datetime, timedelta
 
 from utils.embeds import luxury_embed
-from utils.config import COLOR_DANGER, COLOR_SECONDARY
+from utils.config import COLOR_DANGER, COLOR_SECONDARY, COLOR_GOLD
+from utils import state
 
 
 class Audit(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+        # Prevent duplicate notifications
+        self._recent_actions: dict[tuple[int, str], datetime] = {}
+
     # =================================================
-    # INTERNAL PERMISSION CHECK
+    # INTERNAL HELPERS
     # =================================================
 
-    def can_view_audit_logs(self, guild: discord.Guild) -> bool:
-        bot_member = guild.get_member(self.bot.user.id)
-        return bool(bot_member and bot_member.guild_permissions.view_audit_log)
+    def _can_view_audit(self, guild: discord.Guild) -> bool:
+        me = guild.get_member(self.bot.user.id)
+        return bool(me and me.guild_permissions.view_audit_log)
+
+    def _is_duplicate(self, user_id: int, action: str, window: int = 10) -> bool:
+        """
+        Prevent duplicate DM spam for same action
+        """
+        key = (user_id, action)
+        now = datetime.utcnow()
+
+        last = self._recent_actions.get(key)
+        if last and (now - last).total_seconds() < window:
+            return True
+
+        self._recent_actions[key] = now
+        return False
+
+    async def _safe_dm(self, user: discord.abc.User, embed: discord.Embed):
+        try:
+            await user.send(embed=embed)
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
+    async def _log(self, guild: discord.Guild, title: str, description: str, color=COLOR_SECONDARY):
+        if not state.BOT_LOG_CHANNEL_ID:
+            return
+
+        channel = guild.get_channel(state.BOT_LOG_CHANNEL_ID)
+        if not channel:
+            return
+
+        try:
+            await channel.send(
+                embed=luxury_embed(
+                    title=title,
+                    description=description,
+                    color=color
+                )
+            )
+        except (discord.Forbidden, discord.HTTPException):
+            pass
 
     # =================================================
     # MANUAL BAN DETECTION
@@ -25,7 +68,7 @@ class Audit(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_ban(self, guild: discord.Guild, user: discord.User):
-        if not self.can_view_audit_logs(guild):
+        if not self._can_view_audit(guild):
             return
 
         await asyncio.sleep(1)
@@ -37,19 +80,31 @@ class Audit(commands.Cog):
             if entry.target.id != user.id:
                 continue
 
-            # Ignore bot-issued bans
+            # Ignore bot bans
             if entry.user and entry.user.id == self.bot.user.id:
                 return
 
-            await self.notify_user(
-                user=user,
-                title="⚖️ Imperial Banishment",
-                description=(
-                    "You have been **permanently banned** from **HellFire Hangout**.\n\n"
-                    f"👤 **Moderator:** {entry.user}\n"
-                    f"📄 **Reason:** {entry.reason or 'Violation of community policies.'}"
-                ),
-                color=COLOR_DANGER
+            if self._is_duplicate(user.id, "ban"):
+                return
+
+            await self._safe_dm(
+                user,
+                luxury_embed(
+                    title="⚖️ Imperial Banishment",
+                    description=(
+                        "You have been **permanently banned** from **HellFire Hangout**.\n\n"
+                        f"👤 **Moderator:** {entry.user}\n"
+                        f"📄 **Reason:** {entry.reason or 'Violation of server rules.'}"
+                    ),
+                    color=COLOR_DANGER
+                )
+            )
+
+            await self._log(
+                guild,
+                "⛔ Manual Ban Detected",
+                f"**User:** {user}\n**Moderator:** {entry.user}\n**Reason:** {entry.reason or 'N/A'}",
+                COLOR_DANGER
             )
             break
 
@@ -61,11 +116,11 @@ class Audit(commands.Cog):
     async def on_member_remove(self, member: discord.Member):
         guild = member.guild
 
-        if not self.can_view_audit_logs(guild):
+        if not self._can_view_audit(guild):
             return
 
         await asyncio.sleep(1)
-        cutoff = datetime.utcnow() - timedelta(seconds=10)
+        cutoff = datetime.utcnow() - timedelta(seconds=15)
 
         async for entry in guild.audit_logs(
             action=discord.AuditLogAction.kick,
@@ -77,20 +132,30 @@ class Audit(commands.Cog):
             if entry.created_at.replace(tzinfo=None) < cutoff:
                 continue
 
-            # Ignore bot-issued kicks
             if entry.user and entry.user.id == self.bot.user.id:
                 return
 
-            await self.notify_user(
-                user=member,
-                title="🚫 Removal Notice",
-                description=(
-                    "You have been **removed** from **HellFire Hangout**.\n\n"
-                    f"⚙️ **Action:** Manual Kick\n"
-                    f"👤 **Moderator:** {entry.user}\n"
-                    f"📄 **Reason:** {entry.reason or 'Administrative decision.'}"
-                ),
-                color=COLOR_DANGER
+            if self._is_duplicate(member.id, "kick"):
+                return
+
+            await self._safe_dm(
+                member,
+                luxury_embed(
+                    title="🚫 Removal Notice",
+                    description=(
+                        "You have been **removed** from **HellFire Hangout**.\n\n"
+                        f"👤 **Moderator:** {entry.user}\n"
+                        f"📄 **Reason:** {entry.reason or 'Administrative decision.'}"
+                    ),
+                    color=COLOR_DANGER
+                )
+            )
+
+            await self._log(
+                guild,
+                "👢 Manual Kick Detected",
+                f"**User:** {member}\n**Moderator:** {entry.user}\n**Reason:** {entry.reason or 'N/A'}",
+                COLOR_DANGER
             )
             break
 
@@ -108,7 +173,7 @@ class Audit(commands.Cog):
 
         guild = after.guild
 
-        if not self.can_view_audit_logs(guild):
+        if not self._can_view_audit(guild):
             return
 
         await asyncio.sleep(1)
@@ -120,47 +185,35 @@ class Audit(commands.Cog):
             if entry.target.id != after.id:
                 continue
 
-            # Ignore bot-issued timeouts
             if entry.user and entry.user.id == self.bot.user.id:
                 return
 
-            until = after.timed_out_until.strftime("%Y-%m-%d %H:%M UTC")
+            if self._is_duplicate(after.id, "timeout"):
+                return
 
-            await self.notify_user(
-                user=after,
-                title="⏳ Temporary Restriction Applied",
-                description=(
-                    "Your communication privileges in **HellFire Hangout** have been "
-                    "**temporarily restricted**.\n\n"
-                    f"👤 **Moderator:** {entry.user}\n"
-                    f"⏰ **Until:** {until}\n"
-                    f"📄 **Reason:** {entry.reason or 'Cooldown period required.'}"
-                ),
-                color=COLOR_SECONDARY
-            )
-            break
+            until = after.timed_out_until.strftime("%d %b %Y • %H:%M UTC")
 
-    # =================================================
-    # SAFE DM HELPER
-    # =================================================
-
-    async def notify_user(
-        self,
-        user: discord.abc.User,
-        title: str,
-        description: str,
-        color: int
-    ):
-        try:
-            await user.send(
-                embed=luxury_embed(
-                    title=title,
-                    description=description,
-                    color=color
+            await self._safe_dm(
+                after,
+                luxury_embed(
+                    title="⏳ Temporal Seal Applied",
+                    description=(
+                        "Your communication privileges have been **temporarily restricted**.\n\n"
+                        f"👤 **Moderator:** {entry.user}\n"
+                        f"⏰ **Until:** {until}\n"
+                        f"📄 **Reason:** {entry.reason or 'Cooldown enforced.'}"
+                    ),
+                    color=COLOR_SECONDARY
                 )
             )
-        except (discord.Forbidden, discord.HTTPException):
-            pass
+
+            await self._log(
+                guild,
+                "⏳ Manual Timeout Detected",
+                f"**User:** {after}\n**Moderator:** {entry.user}\n**Until:** {until}",
+                COLOR_SECONDARY
+            )
+            break
 
 
 async def setup(bot: commands.Bot):
