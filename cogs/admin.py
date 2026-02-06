@@ -20,7 +20,7 @@ class Admin(commands.Cog):
             }
 
     # =================================================
-    # BOOTSTRAP SETUP (FIXED & STABLE)
+    # BOOTSTRAP SETUP
     # =================================================
 
     @commands.command(name="setup")
@@ -49,15 +49,16 @@ class Admin(commands.Cog):
         guild = ctx.guild
         state.MAIN_GUILD_ID = guild.id
 
-        bot_member = guild.get_member(self.bot.user.id)
+        bot_member = guild.me
         if not bot_member:
             return
 
+        # ---------- ROLE PERMISSION CHECK ----------
         if not bot_member.guild_permissions.manage_roles:
             return await ctx.send(
                 embed=luxury_embed(
                     title="❌ Missing Permissions",
-                    description="I need **Manage Roles** permission.",
+                    description="I need **Manage Roles** permission to complete setup.",
                     color=COLOR_DANGER
                 )
             )
@@ -74,6 +75,7 @@ class Admin(commands.Cog):
 
         for level, name in role_map.items():
             role = discord.utils.get(guild.roles, name=name)
+
             if not role:
                 role = await guild.create_role(
                     name=name,
@@ -83,7 +85,7 @@ class Admin(commands.Cog):
 
             state.STAFF_ROLE_TIERS[level] = role.id
 
-        # ---------- BOT LOG CHANNEL ----------
+        # ---------- CHANNEL PERMISSION CHECK ----------
         if not bot_member.guild_permissions.manage_channels:
             return await ctx.send(
                 embed=luxury_embed(
@@ -93,6 +95,7 @@ class Admin(commands.Cog):
                 )
             )
 
+        # ---------- BOT LOG CHANNEL ----------
         log_channel = discord.utils.get(guild.text_channels, name="bot-logs")
 
         if not log_channel:
@@ -119,7 +122,7 @@ class Admin(commands.Cog):
                 title="⚙️ Setup Complete",
                 description=(
                     "**Staff system initialized successfully.**\n\n"
-                    f"{'🆕 Created Roles: ' + ', '.join(created_roles) if created_roles else '✅ All roles already existed.'}\n\n"
+                    f"{'🆕 Created Roles: ' + ', '.join(created_roles) if created_roles else '✅ All staff roles already existed.'}\n\n"
                     f"📁 **Bot Logs:** {log_channel.mention}\n\n"
                     "You may now use all admin commands."
                 ),
@@ -155,6 +158,7 @@ class Admin(commands.Cog):
             return
 
         state.WELCOME_CHANNEL_ID = None
+        state.MAIN_GUILD_ID = ctx.guild.id
 
         await ctx.send(
             embed=luxury_embed(
@@ -175,6 +179,8 @@ class Admin(commands.Cog):
             return
 
         state.SUPPORT_LOG_CHANNEL_ID = ctx.channel.id
+        state.MAIN_GUILD_ID = ctx.guild.id
+
         await ctx.send(
             embed=luxury_embed(
                 title="📊 Support Logs Enabled",
@@ -190,6 +196,8 @@ class Admin(commands.Cog):
             return
 
         state.SUPPORT_LOG_CHANNEL_ID = None
+        state.MAIN_GUILD_ID = ctx.guild.id
+
         await ctx.send(
             embed=luxury_embed(
                 title="❌ Support Logs Disabled",
@@ -209,10 +217,12 @@ class Admin(commands.Cog):
             return
 
         state.AUTO_ROLE_ID = role.id
+        state.MAIN_GUILD_ID = ctx.guild.id
+
         await ctx.send(
             embed=luxury_embed(
                 title="🏅 Autorole Enabled",
-                description=f"New members will get {role.mention}.",
+                description=f"New members will receive {role.mention}.",
                 color=COLOR_GOLD
             )
         )
@@ -224,6 +234,8 @@ class Admin(commands.Cog):
             return
 
         state.AUTO_ROLE_ID = None
+        state.MAIN_GUILD_ID = ctx.guild.id
+
         await ctx.send(
             embed=luxury_embed(
                 title="❌ Autorole Disabled",
@@ -233,11 +245,13 @@ class Admin(commands.Cog):
         )
 
     # =================================================
-    # STAFF CHECK (FIXED)
+    # INTERNAL STAFF CHECK
     # =================================================
 
     def _is_staff_level(self, ctx: commands.Context, required: int) -> bool:
-        if ctx.author == ctx.guild.owner or ctx.author.guild_permissions.administrator:
+        if ctx.author == ctx.guild.owner:
+            return True
+        if ctx.author.guild_permissions.administrator:
             return True
 
         highest = 0
