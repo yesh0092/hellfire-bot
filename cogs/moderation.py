@@ -22,23 +22,21 @@ SPAM_WINDOW_SEC = 6
 SPAM_LIMIT_NORMAL = 6
 SPAM_LIMIT_PANIC = 4
 
-SPAM_COOLDOWN = 30                 # prevents loops
+SPAM_COOLDOWN = 30                 # prevents punishment loops
 
 
 class Moderation(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+
         self.spam_cache: dict[int, list[float]] = {}
         self.last_spam_action: dict[int, float] = {}
 
         # =================================================
-        # HARDEN STATE (CRITICAL FIX)
+        # HARDEN RUNTIME STATE (CRITICAL)
         # =================================================
-        if not hasattr(state, "WARN_DATA"):
-            state.WARN_DATA = {}
-
-        if not hasattr(state, "WARN_LOGS"):
-            state.WARN_LOGS = {}
+        state.WARN_DATA = getattr(state, "WARN_DATA", {})
+        state.WARN_LOGS = getattr(state, "WARN_LOGS", {})
 
     # =====================================================
     # INTERNAL HELPERS
@@ -47,7 +45,7 @@ class Moderation(commands.Cog):
     def _bot_member(self, guild: discord.Guild):
         return guild.get_member(self.bot.user.id)
 
-    def _invalid_target(self, ctx, member):
+    def _invalid_target(self, ctx, member: discord.Member) -> bool:
         if member == ctx.author:
             return True
         if member.bot:
@@ -58,13 +56,13 @@ class Moderation(commands.Cog):
             return True
         return False
 
-    async def _safe_dm(self, member, embed):
+    async def _safe_dm(self, member: discord.Member, embed: discord.Embed):
         try:
             await member.send(embed=embed)
         except (discord.Forbidden, discord.HTTPException):
             pass
 
-    async def _log(self, ctx, title, description, color=COLOR_SECONDARY):
+    async def _log(self, ctx, title: str, description: str, color=COLOR_SECONDARY):
         if not ctx or not state.BOT_LOG_CHANNEL_ID:
             return
 
@@ -74,13 +72,17 @@ class Moderation(commands.Cog):
 
         try:
             await channel.send(
-                embed=luxury_embed(title=title, description=description, color=color)
+                embed=luxury_embed(
+                    title=title,
+                    description=description,
+                    color=color
+                )
             )
         except (discord.Forbidden, discord.HTTPException):
             pass
 
     # =====================================================
-    # AUTOMATIC SPAM PROTECTION (SILENT)
+    # AUTOMATIC SPAM PROTECTION (SILENT, NO SLOWMODE)
     # =====================================================
 
     @commands.Cog.listener()
@@ -93,15 +95,18 @@ class Moderation(commands.Cog):
 
         member = message.author
 
+        # Ignore staff
         if member.guild_permissions.manage_messages:
             return
 
+        # Ignore timed out users
         if member.is_timed_out():
             return
 
         uid = member.id
         now = time.time()
 
+        # Cooldown after action
         if uid in self.last_spam_action and now - self.last_spam_action[uid] < SPAM_COOLDOWN:
             return
 
@@ -110,7 +115,11 @@ class Moderation(commands.Cog):
             t for t in self.spam_cache[uid] if now - t < SPAM_WINDOW_SEC
         ]
 
-        limit = SPAM_LIMIT_PANIC if state.SYSTEM_FLAGS.get("panic_mode") else SPAM_LIMIT_NORMAL
+        limit = (
+            SPAM_LIMIT_PANIC
+            if state.SYSTEM_FLAGS.get("panic_mode")
+            else SPAM_LIMIT_NORMAL
+        )
 
         if len(self.spam_cache[uid]) >= limit:
             try:
@@ -131,7 +140,7 @@ class Moderation(commands.Cog):
             self.spam_cache.pop(uid, None)
 
     # =====================================================
-    # WARN SYSTEM
+    # WARN SYSTEM (ESCALATING)
     # =====================================================
 
     @commands.command()
@@ -161,7 +170,10 @@ class Moderation(commands.Cog):
             member,
             luxury_embed(
                 title="⚠️ Warning Issued",
-                description=f"Reason: {reason}\nTotal warnings: {warns}",
+                description=(
+                    f"📄 **Reason:** {reason}\n"
+                    f"⚠️ **Total Warnings:** {warns}"
+                ),
                 color=COLOR_SECONDARY
             )
         )
@@ -177,12 +189,12 @@ class Moderation(commands.Cog):
         await self._log(
             ctx,
             "⚠️ Warning Issued",
-            f"User: {member.mention}\nReason: {reason}\nTotal: {warns}"
+            f"{member.mention}\nReason: {reason}\nTotal warnings: {warns}"
         )
 
         await self._handle_escalation(ctx, member, warns)
 
-    async def _handle_escalation(self, ctx, member, warns):
+    async def _handle_escalation(self, ctx, member, warns: int):
         if warns == WARN_TIMEOUT_THRESHOLD:
             await self._apply_timeout(
                 ctx,
@@ -199,7 +211,7 @@ class Moderation(commands.Cog):
             )
 
     # =====================================================
-    # TIMEOUT COMMAND
+    # TIMEOUT
     # =====================================================
 
     @commands.command()
@@ -208,7 +220,7 @@ class Moderation(commands.Cog):
     async def timeout(self, ctx, member: discord.Member, minutes: int, *, reason="No reason provided"):
         await self._apply_timeout(ctx, member, minutes, reason)
 
-    async def _apply_timeout(self, ctx, member, minutes, reason, silent=False):
+    async def _apply_timeout(self, ctx, member, minutes: int, reason: str, silent=False):
         bot = self._bot_member(member.guild)
         if not bot or not bot.guild_permissions.moderate_members:
             return
@@ -217,7 +229,10 @@ class Moderation(commands.Cog):
             member,
             luxury_embed(
                 title="⏳ Timeout Applied",
-                description=f"{minutes} minutes\nReason: {reason}",
+                description=(
+                    f"⏱ **Duration:** {minutes} minutes\n"
+                    f"📄 **Reason:** {reason}"
+                ),
                 color=COLOR_SECONDARY
             )
         )
@@ -228,19 +243,20 @@ class Moderation(commands.Cog):
             await ctx.send(
                 embed=luxury_embed(
                     title="⏳ Timeout Executed",
-                    description=f"{member.mention} timed out for {minutes} minutes.",
+                    description=f"{member.mention} timed out for **{minutes} minutes**.",
                     color=COLOR_GOLD
                 )
             )
 
-        await self._log(
-            ctx,
-            "⏳ Timeout Applied",
-            f"{member.mention}\nDuration: {minutes} min\nReason: {reason}"
-        )
+        if ctx:
+            await self._log(
+                ctx,
+                "⏳ Timeout Applied",
+                f"{member.mention}\nDuration: {minutes} min\nReason: {reason}"
+            )
 
     # =====================================================
-    # KICK COMMAND
+    # KICK
     # =====================================================
 
     @commands.command()
@@ -249,7 +265,7 @@ class Moderation(commands.Cog):
     async def kick(self, ctx, member: discord.Member, *, reason="No reason provided"):
         await self._apply_kick(ctx, member, reason)
 
-    async def _apply_kick(self, ctx, member, reason):
+    async def _apply_kick(self, ctx, member, reason: str):
         bot = self._bot_member(ctx.guild)
         if not bot or not bot.guild_permissions.kick_members:
             return
@@ -257,8 +273,8 @@ class Moderation(commands.Cog):
         await self._safe_dm(
             member,
             luxury_embed(
-                title="🚫 Kicked",
-                description=f"Reason: {reason}",
+                title="🚫 You Were Kicked",
+                description=f"📄 **Reason:** {reason}",
                 color=COLOR_DANGER
             )
         )
@@ -280,7 +296,7 @@ class Moderation(commands.Cog):
         )
 
     # =====================================================
-    # BAN COMMAND
+    # BAN
     # =====================================================
 
     @commands.command()
@@ -294,8 +310,8 @@ class Moderation(commands.Cog):
         await self._safe_dm(
             member,
             luxury_embed(
-                title="⛔ Banned",
-                description=f"Reason: {reason}",
+                title="⛔ You Were Banned",
+                description=f"📄 **Reason:** {reason}",
                 color=COLOR_DANGER
             )
         )
