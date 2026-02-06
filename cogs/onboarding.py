@@ -10,6 +10,7 @@ WELCOME_GIF_URL = (
     "https://raw.githubusercontent.com/yesh0092/hellfire-bot/main/welcome%20hell.mp4"
 )
 
+
 # =====================================================
 # ONBOARDING VIEW
 # =====================================================
@@ -30,13 +31,14 @@ class OnboardingView(discord.ui.View):
         return True
 
     async def on_timeout(self):
-        # Auto-clean expired onboarding panel
         msg_id = state.ONBOARDING_MESSAGES.pop(self.member.id, None)
         if not msg_id:
             return
 
         try:
-            channel = self.member.dm_channel or await self.member.create_dm()
+            channel = self.member.dm_channel
+            if not channel:
+                return
             msg = await channel.fetch_message(msg_id)
             await msg.delete()
         except (discord.NotFound, discord.Forbidden, discord.HTTPException):
@@ -45,12 +47,11 @@ class OnboardingView(discord.ui.View):
     async def finalize(self, interaction: discord.Interaction):
         msg_id = state.ONBOARDING_MESSAGES.pop(self.member.id, None)
 
-        if msg_id:
-            try:
-                msg = await interaction.channel.fetch_message(msg_id)
-                await msg.delete()
-            except (discord.NotFound, discord.Forbidden):
-                pass
+        try:
+            if msg_id:
+                await interaction.message.delete()
+        except (discord.NotFound, discord.Forbidden):
+            pass
 
         await interaction.response.send_message(
             embed=luxury_embed(
@@ -88,15 +89,19 @@ class Onboarding(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    # -------------------------------------
+        # Ensure runtime state exists
+        if not hasattr(state, "ONBOARDING_MESSAGES"):
+            state.ONBOARDING_MESSAGES = {}
+
+    # =====================================================
     # MEMBER JOIN
-    # -------------------------------------
+    # =====================================================
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         guild = member.guild
 
-        # ---------------- AUTO ROLE ----------------
+        # ---------- AUTO ROLE ----------
         if state.AUTO_ROLE_ID:
             role = guild.get_role(state.AUTO_ROLE_ID)
             if role:
@@ -105,7 +110,7 @@ class Onboarding(commands.Cog):
                 except discord.Forbidden:
                     pass
 
-        # ---------------- SERVER WELCOME ----------------
+        # ---------- SERVER WELCOME ----------
         if state.WELCOME_CHANNEL_ID:
             channel = guild.get_channel(state.WELCOME_CHANNEL_ID)
             if channel:
@@ -118,14 +123,19 @@ class Onboarding(commands.Cog):
                     ),
                     color=COLOR_GOLD
                 )
-
                 embed.set_thumbnail(url=member.display_avatar.url)
                 embed.set_image(url=WELCOME_GIF_URL)
 
-                await channel.send(embed=embed)
+                try:
+                    await channel.send(embed=embed)
+                except discord.Forbidden:
+                    pass
 
-        # ---------------- DM ONBOARDING ----------------
+        # ---------- DM ONBOARDING ----------
         try:
+            if member.id in state.ONBOARDING_MESSAGES:
+                return  # prevent duplicate panels
+
             welcome = luxury_embed(
                 title="Welcome",
                 description=(
@@ -135,7 +145,6 @@ class Onboarding(commands.Cog):
                 ),
                 color=COLOR_SECONDARY
             )
-
             welcome.set_thumbnail(url=member.display_avatar.url)
             welcome.set_image(url=WELCOME_GIF_URL)
 
@@ -149,35 +158,28 @@ class Onboarding(commands.Cog):
                 ),
                 color=COLOR_SECONDARY
             )
-
             inquiry.set_thumbnail(url=member.display_avatar.url)
 
-            msg = await member.send(
-                embed=inquiry,
-                view=OnboardingView(self.bot, member)
-            )
+            view = OnboardingView(self.bot, member)
+            msg = await member.send(embed=inquiry, view=view)
 
             state.ONBOARDING_MESSAGES[member.id] = msg.id
 
         except (discord.Forbidden, discord.HTTPException):
             pass
 
-    # -------------------------------------
-    # EXTERNAL DM HANDLER (CALLED FROM MAIN)
-    # -------------------------------------
+    # =====================================================
+    # DM HANDLER (CALLED FROM main.py)
+    # =====================================================
 
     async def handle_dm(self, message: discord.Message):
-        """
-        Called safely from main.py for DM-only logic.
-        """
         user_id = message.author.id
 
-        # Manual onboarding completion via text
+        # Manual onboarding completion
         if user_id in state.ONBOARDING_MESSAGES:
             try:
-                msg = await message.channel.fetch_message(
-                    state.ONBOARDING_MESSAGES.pop(user_id)
-                )
+                msg_id = state.ONBOARDING_MESSAGES.pop(user_id)
+                msg = await message.channel.fetch_message(msg_id)
                 await msg.delete()
             except (discord.NotFound, discord.Forbidden):
                 pass
