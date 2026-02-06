@@ -47,11 +47,7 @@ class CloseTicketView(discord.ui.View):
             return False
         return True
 
-    @discord.ui.button(
-        label="Close Ticket",
-        emoji="🔒",
-        style=discord.ButtonStyle.danger
-    )
+    @discord.ui.button(label="Close Ticket", emoji="🔒", style=discord.ButtonStyle.danger)
     async def close_ticket(self, interaction: discord.Interaction, _):
         await interaction.response.send_message(
             embed=luxury_embed(
@@ -76,7 +72,7 @@ class CloseTicketView(discord.ui.View):
 
 
 # =====================================================
-# DM SUPPORT PANEL VIEW
+# DM SUPPORT PANEL VIEW (WITH CANCEL)
 # =====================================================
 
 class SupportView(discord.ui.View):
@@ -96,11 +92,8 @@ class SupportView(discord.ui.View):
     async def on_timeout(self):
         state.DM_SUPPORT_SESSIONS.pop(self.user.id, None)
 
-    @discord.ui.button(
-        label="Create Ticket",
-        emoji="🎟️",
-        style=discord.ButtonStyle.primary
-    )
+    # ---------- CREATE TICKET ----------
+    @discord.ui.button(label="Create Ticket", emoji="🎟️", style=discord.ButtonStyle.primary)
     async def create_ticket(self, interaction: discord.Interaction, _):
         state.DM_SUPPORT_SESSIONS.pop(self.user.id, None)
 
@@ -125,20 +118,13 @@ class SupportView(discord.ui.View):
                 ephemeral=True
             )
 
-        category = discord.utils.get(
-            guild.categories,
-            name=SUPPORT_CATEGORY_NAME
-        )
-
+        category = discord.utils.get(guild.categories, name=SUPPORT_CATEGORY_NAME)
         if not category:
             category = await guild.create_category(SUPPORT_CATEGORY_NAME)
 
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            self.user: discord.PermissionOverwrite(
-                read_messages=True,
-                send_messages=True
-            )
+            self.user: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
 
         for role in guild.roles:
@@ -185,6 +171,20 @@ class SupportView(discord.ui.View):
             ephemeral=True
         )
 
+    # ---------- CANCEL ----------
+    @discord.ui.button(label="Cancel", emoji="❌", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, _):
+        state.DM_SUPPORT_SESSIONS.pop(self.user.id, None)
+
+        await interaction.response.edit_message(
+            embed=luxury_embed(
+                title="❌ Support Cancelled",
+                description="Your support request has been cancelled.",
+                color=COLOR_SECONDARY
+            ),
+            view=None
+        )
+
 
 # =====================================================
 # SUPPORT COG
@@ -204,9 +204,7 @@ class Support(commands.Cog):
     def cog_unload(self):
         self.ticket_watcher.cancel()
 
-    # =================================================
-    # DM ENTRY POINT (THIS WAS YOUR MAIN BUG)
-    # =================================================
+    # ---------------- DM ENTRY POINT ----------------
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -219,29 +217,25 @@ class Support(commands.Cog):
         user_id = message.author.id
         now = datetime.utcnow()
 
-        session = state.DM_SUPPORT_SESSIONS.get(user_id)
-        if session and now - session < DM_PANEL_EXPIRY:
+        last = state.DM_SUPPORT_SESSIONS.get(user_id)
+        if last and now - last < DM_PANEL_EXPIRY:
             return
 
-        embed = luxury_embed(
-            title="🛎️ HellFire Hangout Support",
-            description=(
-                "Click below to create a support ticket.\n\n"
-                "⏳ Panel expires in **5 minutes**."
-            ),
-            color=COLOR_GOLD
-        )
-
         msg = await message.channel.send(
-            embed=embed,
+            embed=luxury_embed(
+                title="🛎️ HellFire Hangout Support",
+                description=(
+                    "Choose how you want to proceed.\n\n"
+                    "⏳ Panel expires in **5 minutes**."
+                ),
+                color=COLOR_GOLD
+            ),
             view=SupportView(message.author)
         )
 
         state.DM_SUPPORT_SESSIONS[user_id] = now
 
-    # =================================================
-    # AUTO CLOSE INACTIVE TICKETS
-    # =================================================
+    # ---------------- AUTO CLOSE ----------------
 
     @tasks.loop(minutes=10)
     async def ticket_watcher(self):
