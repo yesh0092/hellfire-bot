@@ -1,298 +1,265 @@
 import discord
-import asyncio
 from discord.ext import commands, tasks
 from datetime import datetime, timedelta
 
 from utils.embeds import luxury_embed
-from utils.config import (
-    SUPPORT_CATEGORY_NAME,
-    COLOR_PRIMARY,
-    COLOR_SECONDARY,
-    COLOR_GOLD,
-    COLOR_DANGER
-)
+from utils.config import COLOR_GOLD, COLOR_SECONDARY, COLOR_DANGER
 from utils import state
 
 
 # =====================================================
-# CONFIG
+# CONFIGURATION
 # =====================================================
 
-DM_PANEL_EXPIRY = timedelta(minutes=5)
+STAFF_ROLE_NAMES = ("Staff", "Staff+", "Staff++", "Staff+++")
+ABUSE_ALERT_COOLDOWN = timedelta(hours=1)
+BURNOUT_ACTION_LIMIT = 20
+RAPID_ACTION_WINDOW = timedelta(minutes=2)
+RAPID_ACTION_LIMIT = 10
 
 
-# =====================================================
-# CLOSE TICKET VIEW
-# =====================================================
-
-class CloseTicketView(discord.ui.View):
-    def __init__(self, owner_id: int):
-        super().__init__(timeout=None)
-        self.owner_id = owner_id
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if (
-            interaction.user.id != self.owner_id
-            and not interaction.user.guild_permissions.manage_channels
-        ):
-            await interaction.response.send_message(
-                embed=luxury_embed(
-                    title="❌ Permission Denied",
-                    description="Only the ticket owner or staff may close this ticket.",
-                    color=COLOR_DANGER
-                ),
-                ephemeral=True
-            )
-            return False
-        return True
-
-    @discord.ui.button(label="Close Ticket", emoji="🔒", style=discord.ButtonStyle.danger)
-    async def close_ticket(self, interaction: discord.Interaction, _):
-        await interaction.response.send_message(
-            embed=luxury_embed(
-                title="🔒 Ticket Closed",
-                description="This ticket will close shortly.",
-                color=COLOR_SECONDARY
-            ),
-            ephemeral=True
-        )
-
-        state.OPEN_TICKETS.pop(self.owner_id, None)
-        state.TICKET_META.pop(interaction.channel.id, None)
-
-        await asyncio.sleep(3)
-        try:
-            await interaction.channel.delete()
-        except (discord.Forbidden, discord.NotFound):
-            pass
-
-
-# =====================================================
-# SUPPORT VIEW (DM PANEL)
-# =====================================================
-
-class SupportView(discord.ui.View):
-    def __init__(self, user: discord.User, message_id: int):
-        super().__init__(timeout=180)
-        self.user = user
-        self.message_id = message_id
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id != self.user.id:
-            await interaction.response.send_message(
-                "❌ This support panel is not for you.",
-                ephemeral=True
-            )
-            return False
-        return True
-
-    def clear_session(self):
-        state.DM_SUPPORT_SESSIONS.pop(self.user.id, None)
-
-    async def on_timeout(self):
-        """
-        Edit the panel when it expires instead of deleting it
-        """
-        self.clear_session()
-
-        try:
-            channel = self.user.dm_channel or await self.user.create_dm()
-            msg = await channel.fetch_message(self.message_id)
-
-            await msg.edit(
-                embed=luxury_embed(
-                    title="⏳ Support Session Expired",
-                    description=(
-                        "This support panel is no longer active.\n\n"
-                        "Please send **any message** again to open a new support session."
-                    ),
-                    color=COLOR_SECONDARY
-                ),
-                view=None
-            )
-        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-            pass
-
-    # ---------------- CREATE TICKET ----------------
-
-    @discord.ui.button(label="Create Ticket", emoji="🎟️", style=discord.ButtonStyle.primary)
-    async def open_ticket(self, interaction: discord.Interaction, _):
-        self.clear_session()
-
-        guild = interaction.client.get_guild(state.MAIN_GUILD_ID)
-        if not guild:
-            return await interaction.response.send_message(
-                embed=luxury_embed(
-                    title="⚙️ System Unavailable",
-                    description="Support is currently unavailable.",
-                    color=COLOR_SECONDARY
-                ),
-                ephemeral=True
-            )
-
-        if self.user.id in state.OPEN_TICKETS:
-            return await interaction.response.send_message(
-                embed=luxury_embed(
-                    title="⏳ Ticket Already Open",
-                    description="You already have an active support ticket.",
-                    color=COLOR_SECONDARY
-                ),
-                ephemeral=True
-            )
-
-        category = discord.utils.get(guild.categories, name=SUPPORT_CATEGORY_NAME)
-        if not category:
-            try:
-                category = await guild.create_category(SUPPORT_CATEGORY_NAME)
-            except discord.Forbidden:
-                return
-
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            self.user: discord.PermissionOverwrite(read_messages=True, send_messages=True)
-        }
-
-        for role in guild.roles:
-            if role.name.startswith("Staff"):
-                overwrites[role] = discord.PermissionOverwrite(
-                    read_messages=True,
-                    send_messages=True
-                )
-
-        channel = await guild.create_text_channel(
-            f"ticket-{self.user.name}",
-            category=category,
-            overwrites=overwrites
-        )
-
-        state.OPEN_TICKETS[self.user.id] = channel.id
-
-        panel = await channel.send(
-            embed=luxury_embed(
-                title="🌙 Support Ticket",
-                description=(
-                    f"**User:** {self.user.mention}\n"
-                    "**Status:** 🟡 Awaiting Staff\n\n"
-                    "Please describe your issue below."
-                ),
-                color=COLOR_GOLD
-            ),
-            view=CloseTicketView(self.user.id)
-        )
-
-        state.TICKET_META[channel.id] = {
-            "owner": self.user.id,
-            "created_at": datetime.utcnow(),
-            "last_activity": datetime.utcnow(),
-            "panel_id": panel.id
-        }
-
-        await interaction.response.send_message(
-            embed=luxury_embed(
-                title="✅ Ticket Created",
-                description="Your support ticket has been opened successfully.",
-                color=COLOR_GOLD
-            ),
-            ephemeral=True
-        )
-
-    # ---------------- CANCEL ----------------
-
-    @discord.ui.button(label="Cancel", emoji="❌", style=discord.ButtonStyle.secondary)
-    async def cancel(self, interaction: discord.Interaction, _):
-        self.clear_session()
-        await interaction.response.edit_message(
-            content="Support request cancelled.",
-            embed=None,
-            view=None
-        )
-
-
-# =====================================================
-# SUPPORT COG
-# =====================================================
-
-class Support(commands.Cog):
+class Staff(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        state.DM_SUPPORT_SESSIONS = getattr(state, "DM_SUPPORT_SESSIONS", {})
+
+        # =================================================
+        # HARDEN STATE (CRITICAL FIXES)
+        # =================================================
+
+        if not hasattr(state, "STAFF_STATS"):
+            state.STAFF_STATS = {}
+
+        if not hasattr(state, "STAFF_NOTES"):
+            state.STAFF_NOTES = {}
+
+        if not hasattr(state, "MAIN_GUILD_ID"):
+            state.MAIN_GUILD_ID = None
+
+        self._abuse_alert_cache: dict[int, datetime] = {}
 
     async def cog_load(self):
-        self.ticket_watcher.start()
+        self.activity_monitor.start()
 
     def cog_unload(self):
-        self.ticket_watcher.cancel()
+        self.activity_monitor.cancel()
 
-    # ---------------- DM HANDLER ----------------
-    # ANY MESSAGE IN DM TRIGGERS SUPPORT (ONCE)
+    # =================================================
+    # INTERNAL HELPERS
+    # =================================================
 
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        if message.author.bot:
-            return
+    def is_staff(self, member: discord.Member) -> bool:
+        return any(role.name in STAFF_ROLE_NAMES for role in member.roles)
 
-        if not isinstance(message.channel, discord.DMChannel):
-            return
+    def staff_level(self, member: discord.Member) -> int:
+        level = 0
+        for role in member.roles:
+            if role.name == "Staff":
+                level = max(level, 1)
+            elif role.name == "Staff+":
+                level = max(level, 2)
+            elif role.name == "Staff++":
+                level = max(level, 3)
+            elif role.name == "Staff+++":
+                level = max(level, 4)
+        return level
 
-        user_id = message.author.id
+    def record_action(self, staff_id: int):
+        stats = state.STAFF_STATS.setdefault(
+            staff_id,
+            {
+                "actions": 0,
+                "today": 0,
+                "last_action": None,
+                "first_action_today": None,
+            }
+        )
+
         now = datetime.utcnow()
+        stats["actions"] += 1
+        stats["today"] += 1
+        stats["last_action"] = now
 
-        session = state.DM_SUPPORT_SESSIONS.get(user_id)
+        if not stats["first_action_today"]:
+            stats["first_action_today"] = now
 
-        # Active panel still valid → do nothing
-        if session and now - session["created_at"] < DM_PANEL_EXPIRY:
-            return
+    # =================================================
+    # STAFF NOTES (PRIVATE INTEL)
+    # =================================================
 
-        # Send new panel
-        panel_msg = await message.channel.send(
+    @commands.command()
+    @commands.guild_only()
+    async def note(self, ctx: commands.Context, user: discord.Member, *, note: str):
+        if not self.is_staff(ctx.author):
+            return await ctx.send(
+                embed=luxury_embed(
+                    title="❌ Access Denied",
+                    description="Only staff members may add notes.",
+                    color=COLOR_DANGER
+                )
+            )
+
+        notes = state.STAFF_NOTES.setdefault(user.id, [])
+        notes.append({
+            "by": ctx.author.id,
+            "note": note,
+            "time": datetime.utcnow()
+        })
+
+        self.record_action(ctx.author.id)
+
+        await ctx.send(
             embed=luxury_embed(
-                title="🛎️ HellFire Hangout Support",
-                description=(
-                    "Please choose how you’d like to proceed.\n\n"
-                    "⏳ This panel will expire in **5 minutes**."
-                ),
-                color=COLOR_PRIMARY
+                title="📝 Staff Note Added",
+                description=f"A private note was added for **{user}**.",
+                color=COLOR_GOLD
             )
         )
 
-        view = SupportView(message.author, panel_msg.id)
-        await panel_msg.edit(view=view)
+    @commands.command()
+    @commands.guild_only()
+    async def notes(self, ctx: commands.Context, user: discord.Member):
+        if not self.is_staff(ctx.author):
+            return await ctx.send(
+                embed=luxury_embed(
+                    title="❌ Access Denied",
+                    description="Only staff members may view notes.",
+                    color=COLOR_DANGER
+                )
+            )
 
-        state.DM_SUPPORT_SESSIONS[user_id] = {
-            "message_id": panel_msg.id,
-            "created_at": now
-        }
+        notes = state.STAFF_NOTES.get(user.id, [])
+        if not notes:
+            return await ctx.send(
+                embed=luxury_embed(
+                    title="🧠 Staff Notes",
+                    description="No internal notes recorded.",
+                    color=COLOR_SECONDARY
+                )
+            )
 
-    # ---------------- AUTO CLOSE TICKETS ----------------
+        desc = "\n".join(
+            f"• <@{n['by']}> — {n['note']} (`{n['time'].strftime('%Y-%m-%d')}`)"
+            for n in notes[-10:]
+        )
 
-    @tasks.loop(minutes=10)
-    async def ticket_watcher(self):
+        await ctx.send(
+            embed=luxury_embed(
+                title=f"🧠 Staff Notes — {user}",
+                description=desc,
+                color=COLOR_GOLD
+            )
+        )
+
+    # =================================================
+    # STAFF SNAPSHOT / SCOREBOARD
+    # =================================================
+
+    @commands.command()
+    @commands.guild_only()
+    async def staff(self, ctx: commands.Context):
+        staff_members = [
+            m for m in ctx.guild.members if self.is_staff(m)
+        ]
+
+        if not staff_members:
+            return await ctx.send(
+                embed=luxury_embed(
+                    title="👥 Staff Snapshot",
+                    description="No staff activity recorded.",
+                    color=COLOR_SECONDARY
+                )
+            )
+
+        lines = []
+        for member in staff_members:
+            stats = state.STAFF_STATS.get(member.id, {})
+            lines.append(
+                f"• {member.mention} "
+                f"(Lv {self.staff_level(member)}) — "
+                f"{stats.get('today', 0)} actions today"
+            )
+
+        await ctx.send(
+            embed=luxury_embed(
+                title="👥 Staff Activity Snapshot",
+                description="\n".join(lines),
+                color=COLOR_GOLD
+            )
+        )
+
+    # =================================================
+    # BURNOUT & ABUSE MONITOR (AUTOMATED INTELLIGENCE)
+    # =================================================
+
+    @tasks.loop(minutes=30)
+    async def activity_monitor(self):
         now = datetime.utcnow()
 
-        for channel_id, meta in list(state.TICKET_META.items()):
-            if now - meta["last_activity"] > timedelta(hours=24):
-                channel = self.bot.get_channel(channel_id)
-                if channel:
+        for staff_id, stats in list(state.STAFF_STATS.items()):
+            user = self.bot.get_user(staff_id)
+            if not user:
+                continue
+
+            today = stats.get("today", 0)
+            last_action = stats.get("last_action")
+            first_action = stats.get("first_action_today")
+
+            # ---------------- BURNOUT WARNING ----------------
+            if today >= BURNOUT_ACTION_LIMIT:
+                try:
+                    await user.send(
+                        embed=luxury_embed(
+                            title="🧠 Staff Wellness Alert",
+                            description=(
+                                "You’ve been extremely active today.\n\n"
+                                "Please consider taking a break to avoid burnout."
+                            ),
+                            color=COLOR_SECONDARY
+                        )
+                    )
+                except (discord.Forbidden, discord.HTTPException):
+                    pass
+
+            # ---------------- RAPID ACTION / ABUSE SIGNAL ----------------
+            if (
+                first_action
+                and now - first_action < RAPID_ACTION_WINDOW
+                and today >= RAPID_ACTION_LIMIT
+            ):
+                last_alert = self._abuse_alert_cache.get(staff_id)
+                if last_alert and now - last_alert < ABUSE_ALERT_COOLDOWN:
+                    continue
+
+                self._abuse_alert_cache[staff_id] = now
+
+                guild = self.bot.get_guild(state.MAIN_GUILD_ID)
+                if guild and guild.owner:
                     try:
-                        await channel.send(
+                        await guild.owner.send(
                             embed=luxury_embed(
-                                title="⏳ Ticket Closed",
-                                description="Closed due to inactivity.",
-                                color=COLOR_SECONDARY
+                                title="⚠️ Staff Activity Alert",
+                                description=(
+                                    f"<@{staff_id}> performed many moderation "
+                                    "actions in a short time.\n\n"
+                                    "**This is a safety signal, not an accusation.**"
+                                ),
+                                color=COLOR_DANGER
                             )
                         )
-                        await asyncio.sleep(2)
-                        await channel.delete()
-                    except (discord.Forbidden, discord.NotFound):
+                    except (discord.Forbidden, discord.HTTPException):
                         pass
 
-                state.TICKET_META.pop(channel_id, None)
-                state.OPEN_TICKETS.pop(meta["owner"], None)
+        # ---------------- DAILY RESET ----------------
+        for stats in state.STAFF_STATS.values():
+            last = stats.get("last_action")
+            if last and last.date() != now.date():
+                stats["today"] = 0
+                stats["first_action_today"] = None
 
-    @ticket_watcher.before_loop
-    async def before_watcher(self):
+    @activity_monitor.before_loop
+    async def before_monitor(self):
         await self.bot.wait_until_ready()
 
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(Support(bot))
+    await bot.add_cog(Staff(bot))
