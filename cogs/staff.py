@@ -7,14 +7,34 @@ from utils.config import COLOR_GOLD, COLOR_SECONDARY, COLOR_DANGER
 from utils import state
 
 
-STAFF_ROLE_PREFIX = "Staff"
 ABUSE_ALERT_COOLDOWN = timedelta(hours=1)
 
 
 class Staff(commands.Cog):
+    """
+    Staff intelligence & oversight system.
+    • Private staff notes
+    • Staff activity tracking
+    • Burnout detection
+    • Abuse-pattern alerts (safe & non-accusatory)
+    """
+
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self._abuse_alert_cache: dict[int, datetime] = {}
+
+        # =================================================
+        # 🔒 HARDEN RUNTIME STATE (CRITICAL FIX)
+        # =================================================
+
+        if not hasattr(state, "STAFF_STATS"):
+            state.STAFF_STATS = {}
+
+        if not hasattr(state, "STAFF_NOTES"):
+            state.STAFF_NOTES = {}
+
+        if not hasattr(state, "MAIN_GUILD_ID"):
+            state.MAIN_GUILD_ID = None
 
     async def cog_load(self):
         self.activity_monitor.start()
@@ -27,6 +47,9 @@ class Staff(commands.Cog):
     # =====================================
 
     def is_staff(self, member: discord.Member) -> bool:
+        """
+        Role-name based check (robust even if IDs change)
+        """
         return any(
             role.name in ("Staff", "Staff+", "Staff++", "Staff+++")
             for role in member.roles
@@ -35,7 +58,11 @@ class Staff(commands.Cog):
     def record_action(self, staff_id: int):
         stats = state.STAFF_STATS.setdefault(
             staff_id,
-            {"actions": 0, "today": 0, "last_action": None}
+            {
+                "actions": 0,
+                "today": 0,
+                "last_action": None
+            }
         )
         stats["actions"] += 1
         stats["today"] += 1
@@ -97,7 +124,8 @@ class Staff(commands.Cog):
             )
 
         desc = "\n".join(
-            f"• <@{n['by']}> — {n['note']} (`{n['time'].strftime('%Y-%m-%d')}`)"
+            f"• <@{n['by']}> — {n['note']} "
+            f"(`{n['time'].strftime('%Y-%m-%d %H:%M')}`)"
             for n in notes[-5:]
         )
 
@@ -113,9 +141,9 @@ class Staff(commands.Cog):
     # STAFF SNAPSHOT
     # =====================================
 
-    @commands.command()
+    @commands.command(name="staff")
     @commands.guild_only()
-    async def staff(self, ctx: commands.Context):
+    async def staff_snapshot(self, ctx: commands.Context):
         staff_members = [m for m in ctx.guild.members if self.is_staff(m)]
 
         if not staff_members:
@@ -131,7 +159,9 @@ class Staff(commands.Cog):
         for member in staff_members:
             stats = state.STAFF_STATS.get(member.id, {})
             lines.append(
-                f"• {member.mention} — {stats.get('today', 0)} actions today"
+                f"• {member.mention} — "
+                f"{stats.get('today', 0)} actions today | "
+                f"{stats.get('actions', 0)} total"
             )
 
         await ctx.send(
@@ -158,7 +188,7 @@ class Staff(commands.Cog):
             today = stats.get("today", 0)
             last_action = stats.get("last_action")
 
-            # Burnout warning
+            # 🔹 Burnout reminder
             if today >= 20:
                 try:
                     await user.send(
@@ -166,7 +196,8 @@ class Staff(commands.Cog):
                             title="🧠 Staff Wellness Reminder",
                             description=(
                                 "You’ve been highly active today.\n\n"
-                                "Please consider taking a short break to avoid burnout."
+                                "Please consider taking a short break "
+                                "to avoid burnout."
                             ),
                             color=COLOR_SECONDARY
                         )
@@ -174,7 +205,7 @@ class Staff(commands.Cog):
                 except (discord.Forbidden, discord.HTTPException):
                     pass
 
-            # Abuse detection with cooldown
+            # 🔹 Abuse-pattern alert (rate + cooldown protected)
             if (
                 last_action
                 and now - last_action < timedelta(minutes=2)
@@ -195,7 +226,8 @@ class Staff(commands.Cog):
                                 description=(
                                     f"<@{staff_id}> has performed many moderation "
                                     "actions in a short time.\n\n"
-                                    "This is a **safety signal**, not an accusation."
+                                    "This is a **safety signal**, "
+                                    "not an accusation."
                                 ),
                                 color=COLOR_DANGER
                             )
@@ -203,9 +235,12 @@ class Staff(commands.Cog):
                     except (discord.Forbidden, discord.HTTPException):
                         pass
 
-        # Daily reset
+        # 🔄 Daily reset
         for stats in state.STAFF_STATS.values():
-            if stats.get("last_action") and stats["last_action"].date() != now.date():
+            if (
+                stats.get("last_action")
+                and stats["last_action"].date() != now.date()
+            ):
                 stats["today"] = 0
 
     @activity_monitor.before_loop
