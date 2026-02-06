@@ -7,7 +7,7 @@ from utils.config import COLOR_GOLD, COLOR_SECONDARY, COLOR_DANGER
 from utils.permissions import require_level
 from utils import state
 
-BOT_PREFIX = "&"  # SINGLE SOURCE OF TRUTH
+BOT_PREFIX = "&"
 
 
 class System(commands.Cog):
@@ -15,87 +15,111 @@ class System(commands.Cog):
         self.bot = bot
         self.start_time = datetime.utcnow()
 
-        # =================================================
-        # HARDEN GLOBAL STATE (NEVER REMOVE)
-        # =================================================
+        # ================= HARDEN STATE =================
         if not hasattr(state, "SYSTEM_FLAGS"):
             state.SYSTEM_FLAGS = {}
 
         state.SYSTEM_FLAGS.setdefault("panic_mode", False)
         state.SYSTEM_FLAGS.setdefault("automod_enabled", True)
-
-        # Informational / future flags
         state.SYSTEM_FLAGS.setdefault("mvp_system", True)
         state.SYSTEM_FLAGS.setdefault("profile_stats", True)
         state.SYSTEM_FLAGS.setdefault("message_tracking", True)
-        state.SYSTEM_FLAGS.setdefault("currency_system", False)
-        state.SYSTEM_FLAGS.setdefault("leveling_system", False)
 
-    # =====================================================
-    # GOD-LEVEL HELP / FULL DOCUMENTATION
-    # =====================================================
+    # ==================================================
+    # FULL HELP / COMPLETE COMMAND GUIDE
+    # ==================================================
 
-    @commands.command(name="help", aliases=["syshelp", "guide", "manual"])
+    @commands.command(
+        name="help",
+        aliases=["syshelp", "guide", "manual", "commands"]
+    )
     @commands.guild_only()
     @require_level(1)
-    async def system_help(self, ctx: commands.Context):
-        """
-        Full interactive documentation & tutorial
-        """
-
+    async def help(self, ctx: commands.Context):
         await ctx.send(
             embed=luxury_embed(
-                title="🌌 HellFire Hangout — SYSTEM CODEX",
+                title="🌌 HellFire Hangout — COMPLETE SYSTEM GUIDE",
                 description=(
 
-                    "Welcome to **HellFire Hangout**.\n"
-                    "This is not a normal bot — this is a **silent, intelligent automation core**.\n\n"
+                    "This is the **official command & feature manual**.\n"
+                    "Every system running in this server is documented below.\n\n"
 
                     "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "🔑 **BASIC USAGE**\n"
+                    "🔑 BASIC INFO\n"
                     "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"• **Prefix:** `{BOT_PREFIX}`\n"
-                    "• Commands work **only inside the server**\n"
+                    f"• Prefix: `{BOT_PREFIX}`\n"
+                    "• Commands work **only in server**\n"
                     "• DMs are reserved for **support & onboarding**\n\n"
 
                     "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "🛎️ **SUPPORT SYSTEM (USERS)**\n"
+                    "👋 ONBOARDING SYSTEM\n"
                     "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "**How to use:**\n"
-                    "1️⃣ DM the bot anything\n"
-                    "2️⃣ Click **Create Ticket**\n"
-                    "3️⃣ Private channel opens automatically\n\n"
-                    "• One ticket per user\n"
-                    "• Logged to staff & support logs\n"
-                    "• Auto-closes after inactivity\n\n"
-
-                    "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "👋 **ONBOARDING SYSTEM**\n"
-                    "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "• Automatic welcome message\n"
+                    "• Auto welcome message\n"
                     "• Interactive DM onboarding panel\n"
-                    "• Auto role assignment (if enabled)\n"
-                    "• Clean & non-intrusive\n\n"
+                    "• Auto role assignment (if set)\n\n"
+                    "**Admin commands:**\n"
+                    f"`{BOT_PREFIX}welcome` → set welcome channel\n"
+                    f"`{BOT_PREFIX}unwelcome`\n"
+                    f"`{BOT_PREFIX}autorole <role>`\n"
+                    f"`{BOT_PREFIX}unautorole`\n\n"
 
                     "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "📊 **PROFILE & ACTIVITY**\n"
+                    "🛎️ SUPPORT SYSTEM (DM BASED)\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "**User flow:**\n"
+                    "• DM bot anything → panel opens\n"
+                    "• Create ticket → private channel\n\n"
+                    "**Staff/Admin:**\n"
+                    f"`{BOT_PREFIX}supportlog` → set log channel\n"
+                    f"`{BOT_PREFIX}unsupportlog`\n\n"
+
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "📢 ANNOUNCEMENT SYSTEM\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"`{BOT_PREFIX}announce <message>`\n"
+                    "• Sends DM announcement to all users\n"
+                    "• Panic-mode safe\n"
+                    "• Rate-limited & logged\n\n"
+
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "📊 PROFILE & STATS\n"
                     "━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"`{BOT_PREFIX}profile [@user]`\n"
                     "• Weekly messages\n"
-                    "• Lifetime messages\n"
+                    "• Total messages\n"
                     "• Join date\n"
                     "• Staff notes (staff only)\n\n"
 
                     "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "🏆 **WEEKLY TEXT MVP SYSTEM**\n"
+                    "🏆 WEEKLY TEXT MVP\n"
                     "━━━━━━━━━━━━━━━━━━━━━━\n"
                     "• Fully automatic\n"
-                    "• Top chatter each week wins MVP role\n"
-                    "• Resets weekly\n"
-                    "• No staff action required\n\n"
+                    "• Most messages in a week wins\n"
+                    "• Role auto-assigned\n"
+                    "• Weekly reset\n\n"
 
                     "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "⚠️ **MODERATION SYSTEM (STAFF)**\n"
+                    "🛡️ AUTOMOD (SILENT)\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "Auto detects:\n"
+                    "• Spam\n"
+                    "• Duplicate messages\n"
+                    "• Caps abuse\n"
+                    "• Emoji spam\n"
+                    "• Mass mentions\n\n"
+                    f"`{BOT_PREFIX}automod on`\n"
+                    f"`{BOT_PREFIX}automod off`\n"
+                    f"`{BOT_PREFIX}automod status`\n\n"
+
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "🚨 PANIC MODE\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"`{BOT_PREFIX}panic`\n"
+                    f"`{BOT_PREFIX}unpanic`\n"
+                    "• Tightens all security limits\n\n"
+
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "⚠️ MODERATION COMMANDS\n"
                     "━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"`{BOT_PREFIX}warn @user <reason>`\n"
                     f"`{BOT_PREFIX}timeout @user <minutes> <reason>`\n"
@@ -103,74 +127,75 @@ class System(commands.Cog):
                     f"`{BOT_PREFIX}ban @user <reason>`\n\n"
                     "**Auto escalation:**\n"
                     "• 3 warns → 24h timeout\n"
-                    "• 5 warns → auto kick\n\n"
+                    "• 5 warns → kick\n\n"
 
                     "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "🛡️ **AUTOMOD (SILENT GOD MODE)**\n"
+                    "📜 WARN SYSTEM (READ ONLY)\n"
                     "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "• Message spam\n"
-                    "• Emoji spam\n"
-                    "• Caps abuse\n"
-                    "• Duplicate messages\n"
-                    "• Mass mentions\n\n"
-                    "⚠️ **NO SLOWMODE USED**\n"
-                    "Only **user-level timeouts**\n\n"
-                    f"`{BOT_PREFIX}automod on / off / status`\n\n"
+                    f"`{BOT_PREFIX}warnstats @user`\n"
+                    "• View warning history\n"
+                    "• Staff-only\n\n"
 
                     "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "🚨 **PANIC MODE (STAFF+++)**\n"
+                    "👮 STAFF SYSTEM\n"
                     "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"`{BOT_PREFIX}panic`\n"
-                    "• Tightens all thresholds\n"
-                    "• Raid & spam defense mode\n\n"
-                    f"`{BOT_PREFIX}unpanic`\n"
-                    "• Restores normal operation\n\n"
-
-                    "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "🎙️ **VOICE SYSTEM (24/7)**\n"
-                    "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"`{BOT_PREFIX}setvc <channel>`\n"
-                    f"`{BOT_PREFIX}unsetvc`\n"
-                    f"`{BOT_PREFIX}vcstatus`\n\n"
-                    "• Auto reconnect\n"
-                    "• Muted & deafened\n"
-                    "• Never leaves unless told\n\n"
-
-                    "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "👮 **STAFF INTELLIGENCE**\n"
-                    "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "• Staff action tracking\n"
+                    f"`{BOT_PREFIX}note @user <note>`\n"
+                    f"`{BOT_PREFIX}notes @user`\n"
+                    f"`{BOT_PREFIX}staff`\n"
+                    "• Staff activity tracking\n"
                     "• Burnout detection\n"
-                    "• Abuse alerts (private)\n"
-                    "• Internal staff notes\n\n"
+                    "• Abuse alerts to owner\n\n"
 
                     "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "📁 **LOGGING & AUDIT**\n"
+                    "🎙️ VOICE SYSTEM (24/7)\n"
                     "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "• Command logs\n"
+                    f"`{BOT_PREFIX}setvc <voice-channel>`\n"
+                    f"`{BOT_PREFIX}unsetvc`\n"
+                    f"`{BOT_PREFIX}vcstatus`\n"
+                    "• Auto rejoin\n"
+                    "• Muted & deafened\n\n"
+
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "📁 LOGGING & AUDIT\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "• Command usage logs\n"
                     "• Error logs\n"
-                    "• Manual moderation detection\n"
-                    "• Silent user notifications\n\n"
+                    "• Manual ban/kick/timeout detection\n"
+                    "• Security logs\n\n"
 
                     "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "🔮 **UPCOMING FEATURES**\n"
+                    "⚙️ ADMIN SETUP\n"
                     "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "• 💰 Server currency (Inferno Coins)\n"
-                    "• 📈 Leveling & prestige system\n"
+                    f"`{BOT_PREFIX}setup`\n"
+                    "• Creates staff roles\n"
+                    "• Sets bot-log channel\n"
+                    "• Initializes system state\n\n"
+
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "📊 SYSTEM STATUS\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"`{BOT_PREFIX}status`\n"
+                    "• Uptime\n"
+                    "• Loaded systems\n"
+                    "• Automod & panic state\n\n"
+
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "🔮 UPCOMING SYSTEMS\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "• 💰 Currency / economy\n"
+                    "• 📈 Leveling & prestige\n"
                     "• 🎨 Anime visual themes\n"
-                    "• 🤖 AI-assisted moderation\n"
-                    "• 🧠 Smart toxicity profiling\n\n"
+                    "• 🤖 AI moderation layer\n\n"
 
-                    "_HellFire Hangout is not a bot.\n"
-                    "It is an **autonomous system**._"
+                    "_Silent • Intelligent • Elite automation_"
                 ),
                 color=COLOR_GOLD
             )
         )
 
-    # =====================================================
+    # ==================================================
     # STATUS
-    # =====================================================
+    # ==================================================
 
     @commands.command()
     @commands.guild_only()
@@ -184,24 +209,20 @@ class System(commands.Cog):
             embed=luxury_embed(
                 title="📊 System Status",
                 description=(
-                    "🟢 **Status:** Online\n"
-                    f"⏱ **Uptime:** {h}h {m}m {s}s\n\n"
-
-                    f"🛡️ **AutoMod:** {'ON' if state.SYSTEM_FLAGS['automod_enabled'] else 'OFF'}\n"
-                    f"🚨 **Panic Mode:** {'ON' if state.SYSTEM_FLAGS['panic_mode'] else 'OFF'}\n"
-                    f"🏆 **Weekly MVP:** {'ON' if state.SYSTEM_FLAGS['mvp_system'] else 'OFF'}\n"
-                    f"📊 **Message Tracking:** {'ON' if state.SYSTEM_FLAGS['message_tracking'] else 'OFF'}\n\n"
-
-                    f"🧠 **Loaded Cogs:** {len(self.bot.cogs)}\n"
-                    f"📁 **Bot Logs:** {'Configured' if state.BOT_LOG_CHANNEL_ID else 'Not Set'}"
+                    f"🟢 Online\n"
+                    f"⏱ Uptime: {h}h {m}m {s}s\n\n"
+                    f"🛡 AutoMod: {'ON' if state.SYSTEM_FLAGS['automod_enabled'] else 'OFF'}\n"
+                    f"🚨 Panic Mode: {'ON' if state.SYSTEM_FLAGS['panic_mode'] else 'OFF'}\n"
+                    f"🏆 MVP System: {'ON' if state.SYSTEM_FLAGS['mvp_system'] else 'OFF'}\n\n"
+                    f"🧠 Loaded Cogs: {len(self.bot.cogs)}"
                 ),
                 color=COLOR_SECONDARY
             )
         )
 
-    # =====================================================
-    # AUTOMOD TOGGLE
-    # =====================================================
+    # ==================================================
+    # AUTOMOD CONTROL
+    # ==================================================
 
     @commands.command()
     @commands.guild_only()
@@ -210,7 +231,7 @@ class System(commands.Cog):
         if not mode:
             return await ctx.send(
                 embed=luxury_embed(
-                    title="⚙️ AutoMod Control",
+                    title="⚙️ AutoMod Usage",
                     description=(
                         f"`{BOT_PREFIX}automod on`\n"
                         f"`{BOT_PREFIX}automod off`\n"
@@ -224,87 +245,38 @@ class System(commands.Cog):
 
         if mode == "on":
             state.SYSTEM_FLAGS["automod_enabled"] = True
-            await ctx.send(luxury_embed(
-                title="🛡️ AutoMod Enabled",
-                description="Automatic moderation is now active.",
-                color=COLOR_GOLD
-            ))
-            await self._log(ctx, "🛡️ AutoMod enabled")
+            await ctx.send(luxury_embed("🛡️ AutoMod Enabled", "System is active.", color=COLOR_GOLD))
 
         elif mode == "off":
             state.SYSTEM_FLAGS["automod_enabled"] = False
-            await ctx.send(luxury_embed(
-                title="⛔ AutoMod Disabled",
-                description="Automatic moderation is now disabled.",
-                color=COLOR_DANGER
-            ))
-            await self._log(ctx, "⛔ AutoMod disabled")
+            await ctx.send(luxury_embed("⛔ AutoMod Disabled", "System is paused.", color=COLOR_DANGER))
 
         elif mode == "status":
-            enabled = state.SYSTEM_FLAGS["automod_enabled"]
-            await ctx.send(luxury_embed(
-                title="🛡️ AutoMod Status",
-                description=f"State: {'ON ✅' if enabled else 'OFF ❌'}",
-                color=COLOR_SECONDARY
-            ))
+            await ctx.send(
+                luxury_embed(
+                    "🛡️ AutoMod Status",
+                    f"State: {'ON' if state.SYSTEM_FLAGS['automod_enabled'] else 'OFF'}",
+                    color=COLOR_SECONDARY
+                )
+            )
 
-        else:
-            await ctx.send(luxury_embed(
-                title="❌ Invalid Option",
-                description="Use `on`, `off`, or `status`.",
-                color=COLOR_DANGER
-            ))
-
-    # =====================================================
+    # ==================================================
     # PANIC MODE
-    # =====================================================
+    # ==================================================
 
     @commands.command()
     @commands.guild_only()
     @require_level(4)
     async def panic(self, ctx: commands.Context):
         state.SYSTEM_FLAGS["panic_mode"] = True
-        await ctx.send(luxury_embed(
-            title="🚨 Panic Mode Enabled",
-            description="Maximum protection activated.",
-            color=COLOR_DANGER
-        ))
-        await self._log(ctx, "🚨 Panic mode enabled")
+        await ctx.send(luxury_embed("🚨 Panic Mode Enabled", "Maximum protection active.", color=COLOR_DANGER))
 
     @commands.command()
     @commands.guild_only()
     @require_level(4)
     async def unpanic(self, ctx: commands.Context):
         state.SYSTEM_FLAGS["panic_mode"] = False
-        await ctx.send(luxury_embed(
-            title="✅ Panic Mode Disabled",
-            description="System restored to normal operation.",
-            color=COLOR_GOLD
-        ))
-        await self._log(ctx, "✅ Panic mode disabled")
-
-    # =====================================================
-    # INTERNAL LOGGER
-    # =====================================================
-
-    async def _log(self, ctx: commands.Context, message: str):
-        if not state.BOT_LOG_CHANNEL_ID:
-            return
-
-        channel = ctx.guild.get_channel(state.BOT_LOG_CHANNEL_ID)
-        if not channel:
-            return
-
-        try:
-            await channel.send(
-                embed=luxury_embed(
-                    title="📁 System Log",
-                    description=f"{message}\n\n**By:** {ctx.author.mention}",
-                    color=COLOR_SECONDARY
-                )
-            )
-        except (discord.Forbidden, discord.HTTPException):
-            pass
+        await ctx.send(luxury_embed("✅ Panic Mode Disabled", "Normal operation restored.", color=COLOR_GOLD))
 
 
 async def setup(bot: commands.Bot):
