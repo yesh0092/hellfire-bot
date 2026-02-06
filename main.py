@@ -6,9 +6,11 @@ from discord.ext import commands
 from dotenv import load_dotenv
 
 from utils import state
+from utils.embeds import luxury_embed
+from utils.config import COLOR_DANGER
 
 # =====================================================
-# LOGGING
+# LOGGING (CLEAN & QUIET)
 # =====================================================
 
 logging.basicConfig(
@@ -16,14 +18,17 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
 )
 
-logging.getLogger("discord").setLevel(logging.WARNING)
-logging.getLogger("discord.http").setLevel(logging.WARNING)
-logging.getLogger("discord.gateway").setLevel(logging.WARNING)
+for noisy in (
+    "discord",
+    "discord.http",
+    "discord.gateway",
+):
+    logging.getLogger(noisy).setLevel(logging.WARNING)
 
-print(">>> PYTHON PROCESS STARTED <<<")
+print("🔥 HellFire Hangout | Python Process Started")
 
 # =====================================================
-# ENV
+# ENVIRONMENT
 # =====================================================
 
 load_dotenv()
@@ -33,7 +38,7 @@ if not TOKEN:
     raise RuntimeError("❌ TOKEN missing in environment")
 
 # =====================================================
-# INTENTS (FULL & CORRECT)
+# INTENTS (FULL — NO SHORTCUTS)
 # =====================================================
 
 intents = discord.Intents.default()
@@ -41,10 +46,11 @@ intents.guilds = True
 intents.members = True
 intents.message_content = True
 intents.moderation = True
-intents.voice_states = True   # 🔥 REQUIRED FOR VC SYSTEM
+intents.voice_states = True
+intents.dm_messages = True
 
 # =====================================================
-# BOT
+# BOT INITIALIZATION
 # =====================================================
 
 bot = commands.Bot(
@@ -60,20 +66,22 @@ bot = commands.Bot(
 @bot.check
 async def block_commands_in_dm(ctx: commands.Context) -> bool:
     """
-    HARD BLOCK: commands never execute in DMs
+    HARD BLOCK:
+    - No commands in DMs
+    - DM messages still reach onboarding/support via on_message
     """
     if ctx.guild is None:
         try:
             await ctx.send(
-                embed=discord.Embed(
+                embed=luxury_embed(
                     title="🚫 Commands Disabled in DMs",
                     description=(
-                        "**HellFire Hangout Support**\n\n"
-                        "Commands can only be used inside the server."
+                        "Commands can only be used **inside the server**.\n\n"
+                        "💬 If you need help, just send a message — the support system will respond automatically."
                     ),
-                    color=0x7c2d12
+                    color=COLOR_DANGER
                 ),
-                delete_after=5
+                delete_after=6
             )
         except discord.Forbidden:
             pass
@@ -84,7 +92,8 @@ async def block_commands_in_dm(ctx: commands.Context) -> bool:
 @bot.check
 async def staff_permission_guard(ctx: commands.Context) -> bool:
     """
-    Staff level enforcement with admin & owner override
+    Enforces staff hierarchy using @require_level
+    Owner & Administrator override always allowed
     """
     if not ctx.command:
         return True
@@ -95,8 +104,8 @@ async def staff_permission_guard(ctx: commands.Context) -> bool:
     if ctx.author.guild_permissions.administrator:
         return True
 
-    required = getattr(ctx.command.callback, "required_level", None)
-    if required is None:
+    required_level = getattr(ctx.command.callback, "required_level", None)
+    if required_level is None:
         return True
 
     highest_level = 0
@@ -104,28 +113,28 @@ async def staff_permission_guard(ctx: commands.Context) -> bool:
         if role_id and any(role.id == role_id for role in ctx.author.roles):
             highest_level = max(highest_level, level)
 
-    if highest_level >= required:
+    if highest_level >= required_level:
         return True
 
     await ctx.send(
-        embed=discord.Embed(
+        embed=luxury_embed(
             title="❌ Permission Denied",
             description="Your staff level is too low for this command.",
-            color=0x7c2d12
+            color=COLOR_DANGER
         ),
         delete_after=5
     )
     return False
 
 # =====================================================
-# ERROR HANDLER
+# ERROR HANDLER (SAFE & SILENT)
 # =====================================================
 
 @bot.event
-async def on_command_error(ctx, error):
-    if isinstance(error, commands.CheckFailure):
-        return
+async def on_command_error(ctx: commands.Context, error: Exception):
     if isinstance(error, commands.CommandNotFound):
+        return
+    if isinstance(error, commands.CheckFailure):
         return
     if isinstance(error, commands.MissingRequiredArgument):
         await ctx.send("⚠️ Missing required arguments.", delete_after=5)
@@ -133,43 +142,61 @@ async def on_command_error(ctx, error):
     if isinstance(error, commands.BadArgument):
         await ctx.send("⚠️ Invalid argument provided.", delete_after=5)
         return
+
+    # Log unexpected errors (do NOT swallow)
     raise error
 
 # =====================================================
-# MESSAGE HANDLER (CRITICAL FIX)
+# MESSAGE ROUTER (CRITICAL)
 # =====================================================
 
 @bot.event
 async def on_message(message: discord.Message):
+    """
+    This is the CORE MESSAGE PIPELINE.
+    DO NOT block anything here.
+    """
     if message.author.bot:
         return
 
-    # 🔑 Allow DMs to reach onboarding/support cogs
+    # DM messages must reach:
+    # - Support system
+    # - Onboarding
+    # - Future DM features
     await bot.process_commands(message)
 
 # =====================================================
-# COG LOADER
+# COG LOADER (ORDER MATTERS)
 # =====================================================
 
 COGS = [
-    # Existing cogs
+    # Core infrastructure
     "cogs.admin",
     "cogs.system",
-    "cogs.moderation",
-    "cogs.warn_system",
-    "cogs.staff",
-    "cogs.security",
-    "cogs.support",
+    "cogs.botlog",
     "cogs.audit",
-    "cogs.announce",
-    "cogs.voice_system",
-    "cogs.onboarding",
 
-    # 🔥 NEW FEATURES (ADDED)
+    # Moderation & security
+    "cogs.moderation",
+    "cogs.warnsystem",
+    "cogs.security",
+    "cogs.automod",
+
+    # Staff intelligence
+    "cogs.staff",
+
+    # Support & onboarding
+    "cogs.support",
+    "cogs.onboarding",
+    "cogs.announce",
+
+    # Activity & engagement
     "cogs.message_tracker",
     "cogs.profile",
-    "cogs.weekly_mvp",
-    "cogs.automod",
+    "cogs.weeklymvp",
+
+    # Voice
+    "cogs.voice_system",
 ]
 
 async def load_cogs():
@@ -181,28 +208,30 @@ async def load_cogs():
             print(f"❌ Failed to load {cog}: {e}")
 
 # =====================================================
-# EVENTS
+# LIFECYCLE EVENTS
 # =====================================================
 
 @bot.event
 async def setup_hook():
-    print(">>> SETUP_HOOK FIRED <<<")
+    print("⚙️ setup_hook started")
     await load_cogs()
 
 @bot.event
 async def on_ready():
-    print(">>> ON_READY FIRED <<<")
-    print(f"🟢 Logged in as: {bot.user}")
+    print("🟢 BOT ONLINE")
+    print(f"👤 Logged in as: {bot.user}")
     print(f"📦 Loaded cogs: {len(bot.cogs)}")
-    print("🛡️ Commands locked to server only")
-    print("⚙️ Prefix set to &")
+    print("🛡️ Staff permission system active")
+    print("💬 DM support system online")
+    print("🔊 Voice system ready")
+    print("🔥 HellFire Hangout is LIVE")
 
 # =====================================================
-# MAIN
+# ENTRYPOINT
 # =====================================================
 
 async def main():
-    print(">>> BOT STARTING LOGIN SEQUENCE <<<")
+    print("🚀 Starting bot login sequence")
     async with bot:
         await bot.start(TOKEN)
 
