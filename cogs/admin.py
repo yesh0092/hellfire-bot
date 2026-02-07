@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+import asyncio
 
 from utils.embeds import luxury_embed
 from utils.config import COLOR_GOLD, COLOR_SECONDARY, COLOR_DANGER
@@ -129,6 +130,91 @@ class Admin(commands.Cog):
                 color=COLOR_GOLD
             )
         )
+
+    # =================================================
+    # ROLE MANAGEMENT (GOD LEVEL)
+    # =================================================
+
+    @commands.command(name="role")
+    @commands.guild_only()
+    async def role(self, ctx: commands.Context, role: discord.Role, members: commands.Greedy[discord.Member]):
+        """Assigns a role to one or multiple users at once"""
+        if not self._is_staff_level(ctx, 3):
+            return
+
+        if role >= ctx.guild.me.top_role:
+            return await ctx.send(embed=luxury_embed("❌ Error", "I cannot assign a role higher than mine.", COLOR_DANGER))
+
+        if not members:
+            return await ctx.send(embed=luxury_embed("❌ Error", "Please mention at least one member.", COLOR_DANGER))
+
+        success = []
+        failed = []
+
+        for member in members:
+            try:
+                await member.add_roles(role, reason=f"Assigned by {ctx.author}")
+                success.append(member.display_name)
+            except discord.Forbidden:
+                failed.append(member.display_name)
+
+        desc = f"✅ Assigned {role.mention} to: **{', '.join(success)}**"
+        if failed:
+            desc += f"\n❌ Failed to assign to: **{', '.join(failed)}**"
+
+        await ctx.send(embed=luxury_embed("🏅 Role Update", desc, COLOR_GOLD))
+
+    @commands.command(name="derole")
+    @commands.guild_only()
+    async def derole(self, ctx: commands.Context, role: discord.Role, members: commands.Greedy[discord.Member]):
+        """Reversible: Removes a role from one or multiple users"""
+        if not self._is_staff_level(ctx, 3):
+            return
+
+        if role >= ctx.guild.me.top_role:
+            return await ctx.send(embed=luxury_embed("❌ Error", "I cannot manage roles higher than mine.", COLOR_DANGER))
+
+        success = []
+        for member in members:
+            try:
+                await member.remove_roles(role, reason=f"Removed by {ctx.author}")
+                success.append(member.display_name)
+            except: continue
+
+        await ctx.send(embed=luxury_embed("🔓 Role Removed", f"Removed {role.mention} from: **{', '.join(success)}**", COLOR_SECONDARY))
+
+    @commands.command(name="massrole")
+    @commands.guild_only()
+    async def massrole(self, ctx: commands.Context, role: discord.Role):
+        """Assigns a role to EVERYONE in the server (High Impact)"""
+        if not self._is_staff_level(ctx, 4):
+            return
+
+        msg = await ctx.send(f"⏳ Processing mass role for {ctx.guild.member_count} members...")
+        count = 0
+        for member in ctx.guild.members:
+            if role not in member.roles:
+                try:
+                    await member.add_roles(role)
+                    count += 1
+                    await asyncio.sleep(0.5) # Avoid rate limits
+                except: continue
+        
+        await msg.edit(content=None, embed=luxury_embed("🌍 Mass Role Complete", f"Added {role.mention} to {count} members.", COLOR_GOLD))
+
+    @commands.command(name="rolecolor")
+    @commands.guild_only()
+    async def rolecolor(self, ctx: commands.Context, role: discord.Role, hex_code: str):
+        """Changes the color of a specific role"""
+        if not self._is_staff_level(ctx, 4):
+            return
+
+        try:
+            color = discord.Color(int(hex_code.lstrip('#'), 16))
+            await role.edit(color=color)
+            await ctx.send(embed=luxury_embed("🎨 Color Updated", f"Role {role.mention} updated to `{hex_code}`", color))
+        except ValueError:
+            await ctx.send("❌ Invalid Hex Code. Example: `#FF0000`")
 
     # =================================================
     # WELCOME CHANNEL
