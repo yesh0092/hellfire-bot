@@ -194,6 +194,7 @@ COGS = [
     "cogs.message_tracker",
     "cogs.profile",
     "cogs.weeklymvp",
+    "cogs.dashboard",
 
     # Voice
     "cogs.voice_system",
