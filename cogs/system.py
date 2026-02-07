@@ -4,9 +4,12 @@ from discord import ui
 import asyncio
 import time
 import platform
+import os
 from datetime import datetime
 
-# Safety import for hardware diagnostics
+# =====================================================
+# SYSTEM DEPENDENCIES & SAFETY
+# =====================================================
 try:
     import psutil
     PSUTIL_AVAILABLE = True
@@ -21,82 +24,87 @@ from utils import state
 BOT_PREFIX = "&"
 
 # =====================================================
-# THE INTERACTIVE HELP COMPONENTS
+# INTERACTIVE HELP UI COMPONENTS
 # =====================================================
 
 class HelpDropdown(ui.Select):
     def __init__(self, bot):
         self.bot = bot
         options = [
-            discord.SelectOption(label="Admin & Setup", emoji="⚙️", description="Server config & panic controls", value="admin"),
-            discord.SelectOption(label="Ultimate Moderation", emoji="🛡️", description="Risk Analysis & Warn Logic", value="mod"),
-            discord.SelectOption(label="Support & System", emoji="🛎️", description="Transcripts & Tickets", value="system"),
-            discord.SelectOption(label="Stats & Activity", emoji="📊", description="User Intel & Profiles", value="stats"),
-            discord.SelectOption(label="Voice System", emoji="🎙️", description="24/7 Voice & Health", value="voice"),
+            discord.SelectOption(label="Admin & Setup", emoji="⚙️", description="Server configuration & protocols", value="admin"),
+            discord.SelectOption(label="Ultimate Moderation", emoji="🛡️", description="Risk Analysis & Security", value="mod"),
+            discord.SelectOption(label="Support & System", emoji="🛎️", description="Transcripts & Health", value="system"),
+            discord.SelectOption(label="Stats & Intelligence", emoji="📊", description="User Profiles & Analytics", value="stats"),
+            discord.SelectOption(label="Voice System", emoji="🎙️", description="24/7 Voice Connectivity", value="voice"),
         ]
         super().__init__(placeholder="🌌 Select a Department to view commands...", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
         selection = self.values[0]
         
+        # Comprehensive documentation mapping
         pages = {
             "admin": {
                 "title": "⚙️ Admin & Setup Commands",
                 "desc": (
-                    f"**{BOT_PREFIX}setup** - Run full server sync.\n"
-                    f"**{BOT_PREFIX}welcome / unwelcome** - Toggle welcome messages.\n"
-                    f"**{BOT_PREFIX}autorole <role>** - Set auto-join role.\n"
-                    f"**{BOT_PREFIX}supportlog** - Set support ticket logs."
+                    f"**{BOT_PREFIX}setup** - Initialize environment.\n"
+                    f"**{BOT_PREFIX}welcome / unwelcome** - Toggle join system.\n"
+                    f"**{BOT_PREFIX}autorole <role>** - Set auto-assign role.\n"
+                    f"**{BOT_PREFIX}supportlog** - Set transcript channel."
                 ), "color": COLOR_GOLD
             },
             "mod": {
-                "title": "🛡️ Moderation & Security Intelligence",
+                "title": "🛡️ Intelligence Moderation",
                 "desc": (
                     f"**{BOT_PREFIX}warn @user <reason>** - Assign infraction.\n"
-                    f"**{BOT_PREFIX}warnstats @user** - View Risk & Progress.\n"
-                    f"**{BOT_PREFIX}warnhistory @user** - Full audit trail.\n"
-                    f"**{BOT_PREFIX}purge <count>** - Mass clean chat."
+                    f"**{BOT_PREFIX}warnstats @user** - Risk & Progress Analysis.\n"
+                    f"**{BOT_PREFIX}warnhistory @user** - Deep audit trail.\n"
+                    f"**{BOT_PREFIX}purge <count>** - Mass clean channel."
                 ), "color": COLOR_DANGER
             },
             "system": {
                 "title": "🛎️ Support & System Health",
                 "desc": (
-                    f"**{BOT_PREFIX}status** - Check bot/hardware health.\n"
+                    f"**{BOT_PREFIX}status** - Hardware/Bot diagnostics.\n"
                     f"**{BOT_PREFIX}automod <on|off>** - Toggle security shield.\n"
-                    f"**{BOT_PREFIX}panic** - Emergency global lockdown.\n"
-                    f"**{BOT_PREFIX}ping** - Test API/Gateway latency."
+                    f"**{BOT_PREFIX}panic / unpanic** - Global Lockdown.\n"
+                    f"**{BOT_PREFIX}ping** - REST & Gateway latency test."
                 ), "color": COLOR_SECONDARY
             },
             "stats": {
-                "title": "📊 Stats & User Intelligence",
+                "title": "📊 User Intelligence & Activity",
                 "desc": (
-                    f"**{BOT_PREFIX}profile** - View user reputation stats.\n"
-                    f"**{BOT_PREFIX}whois @user** - Deep profile analysis.\n"
+                    f"**{BOT_PREFIX}profile** - Reputation & Activity stats.\n"
+                    f"**{BOT_PREFIX}whois @user** - Deep profile assessment.\n"
                     f"**{BOT_PREFIX}avatar @user** - Fetch HD profile media.\n"
-                    f"**{BOT_PREFIX}staff** - View staff activity metrics."
+                    f"**{BOT_PREFIX}staff** - Moderator efficiency metrics."
                 ), "color": COLOR_GOLD
             },
             "voice": {
                 "title": "🎙️ Voice System Protocols",
                 "desc": (
-                    f"**{BOT_PREFIX}setvc <channel>** - Set 24/7 VC lock.\n"
-                    f"**{BOT_PREFIX}unsetvc** - Remove voice lock.\n"
-                    f"**{BOT_PREFIX}vcstatus** - Voice system diagnostics."
+                    f"**{BOT_PREFIX}setvc <channel>** - Lock bot 24/7.\n"
+                    f"**{BOT_PREFIX}unsetvc** - Release voice lock.\n"
+                    f"**{BOT_PREFIX}vcstatus** - Voice stream health."
                 ), "color": COLOR_SECONDARY
             }
         }
 
         page = pages[selection]
-        embed = luxury_embed(page["title"], page["desc"] + "\n\n━━━━━━━━━━━━━━━━━━━━━━\n_Ultimate Edition • Intelligent Automation_", page["color"])
+        embed = luxury_embed(
+            title=page["title"], 
+            description=page["desc"] + "\n\n━━━━━━━━━━━━━━━━━━━━━━\n_Intelligence • Elite Automation_", 
+            color=page["color"]
+        )
         await interaction.response.edit_message(embed=embed)
 
 class HelpView(ui.View):
     def __init__(self, bot):
-        super().__init__(timeout=60)
+        super().__init__(timeout=120)
         self.add_item(HelpDropdown(bot))
 
 # =====================================================
-# THE ULTIMATE SYSTEM COG
+# THE MASTER SYSTEM COG (PLATINUM)
 # =====================================================
 
 class System(commands.Cog):
@@ -106,112 +114,142 @@ class System(commands.Cog):
         if PSUTIL_AVAILABLE:
             self.process = psutil.Process()
 
+        # Harden System State
         if not hasattr(state, "SYSTEM_FLAGS"):
             state.SYSTEM_FLAGS = {}
 
         state.SYSTEM_FLAGS.setdefault("panic_mode", False)
         state.SYSTEM_FLAGS.setdefault("automod_enabled", True)
         state.SYSTEM_FLAGS.setdefault("mvp_system", True)
+        state.SYSTEM_FLAGS.setdefault("intelligence_layer", True)
 
-    # ---------------- MANUAL / HELP ----------------
-    @commands.command(name="help", aliases=["commands", "manual"])
+    # ================= COMMAND MANUAL =================
+
+    @commands.command(name="help", aliases=["commands", "guide", "manual"])
     @commands.guild_only()
     @require_level(1)
     async def help_command(self, ctx: commands.Context):
-        """The New Interactive Help Dashboard"""
+        """The Interactive Intelligence Dashboard"""
         embed = luxury_embed(
-            title="🌌 HellFire Hangout — COMMAND MANUAL",
+            title="🌌 HellFire Hangout — ULTIMATE MANUAL",
             description=(
-                "Welcome to the Unified Intelligence guide.\n"
-                "Select a department below to view specialized commands.\n\n"
-                f"Prefix: `{BOT_PREFIX}`\n"
-                "Intelligence: `God-Mode` | Status: `🟢 Operational`"
+                "**System Integrity:** `🟢 100%` | **Intelligence:** `God-Mode`\n"
+                "Please select a department below to access specific commands.\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "🛰️ **CORE DATA**\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"• Prefix: `{BOT_PREFIX}`\n"
+                f"• AutoMod: `{'ACTIVE' if state.SYSTEM_FLAGS['automod_enabled'] else 'DISABLED'}`\n"
+                f"• Panic Level: `{'CRITICAL' if state.SYSTEM_FLAGS['panic_mode'] else 'NORMAL'}`"
             ),
             color=COLOR_GOLD
         )
         view = HelpView(self.bot)
         await ctx.send(embed=embed, view=view)
 
-    # ---------------- MASTER ROLE TOGGLE ----------------
+    # ================= MASTER ROLE LOGIC =================
+
     @commands.command(name="role")
     @commands.guild_only()
     @require_level(3)
     async def role_toggle(self, ctx: commands.Context, member: discord.Member, *, role: discord.Role):
-        """Intelligent Role Management (Assign/Remove)"""
+        """Intelligent role toggle with hierarchy protection"""
+        # Security Hierarchy Check
         if role.position >= ctx.author.top_role.position and ctx.author.id != ctx.guild.owner_id:
-            return await ctx.send(embed=luxury_embed("❌ Error", "Hierarchy mismatch. Role is too high.", COLOR_DANGER))
+            return await ctx.send(embed=luxury_embed("❌ Hierarchy Conflict", "Role is above your authority.", COLOR_DANGER))
         
+        if role.managed:
+            return await ctx.send(embed=luxury_embed("❌ System Restricted", "Managed roles cannot be assigned manually.", COLOR_DANGER))
+
         if role in member.roles:
-            await member.remove_roles(role)
-            await ctx.send(embed=luxury_embed("🔻 Role Removed", f"Successfully removed {role.mention} from {member.mention}.", COLOR_SECONDARY))
+            await member.remove_roles(role, reason=f"Managed by {ctx.author}")
+            await ctx.send(embed=luxury_embed("🔻 Access Revoked", f"Removed {role.mention} from {member.mention}.", COLOR_SECONDARY))
         else:
-            await member.add_roles(role)
-            await ctx.send(embed=luxury_embed("🔺 Role Added", f"Successfully assigned {role.mention} to {member.mention}.", COLOR_GOLD))
+            await member.add_roles(role, reason=f"Managed by {ctx.author}")
+            await ctx.send(embed=luxury_embed("🔺 Access Granted", f"Assigned {role.mention} to {member.mention}.", COLOR_GOLD))
 
-    # ---------------- USER INTEL (WHOIS) ----------------
-    @commands.command(name="whois", aliases=["ui", "userinfo"])
+    # ================= USER INTELLIGENCE (WHOIS) =================
+
+    @commands.command(name="whois", aliases=["ui", "userinfo", "intel"])
     @commands.guild_only()
+    @require_level(1)
     async def whois(self, ctx: commands.Context, member: discord.Member = None):
-        """Deep analytics and risk assessment of a member"""
+        """Deep analytics & reputation risk assessment"""
         member = member or ctx.author
-        warns = getattr(state, "WARN_DATA", {}).get(member.id, 0)
-        risk = "🟢 Safe" if warns < 3 else "🟡 Risky" if warns < 6 else "🔴 Dangerous"
+        warn_data = getattr(state, "WARN_DATA", {}).get(member.id, 0)
+        
+        # Risk Meter Calculation
+        if warn_data == 0: risk_status = "🟢 Safe (Clean)"
+        elif warn_data < 4: risk_status = "🟡 Risky (Rule Breaker)"
+        else: risk_status = "🔴 Dangerous (Watchlist)"
 
+        roles = [r.mention for r in reversed(member.roles) if r != ctx.guild.default_role]
+        
         desc = (
-            f"👤 **User:** {member.mention}\n"
+            f"👤 **Member:** {member.mention}\n"
             f"🆔 **ID:** `{member.id}`\n\n"
-            f"🧠 **System Risk:** {risk} ({warns} infractions)\n"
+            f"🧠 **System Risk:** {risk_status}\n"
+            f"🛡️ **Total Warns:** `{warn_data}`\n\n"
             f"📅 **Created:** <t:{int(member.created_at.timestamp())}:D>\n"
             f"📅 **Joined:** <t:{int(member.joined_at.timestamp())}:R>\n\n"
-            f"🎭 **Top Role:** {member.top_role.mention}"
+            f"🎭 **Roles:** {', '.join(roles[:5])}{'...' if len(roles) > 5 else ''}"
         )
         embed = luxury_embed(f"🕵️ Intelligence: {member.name}", desc, COLOR_GOLD)
         embed.set_thumbnail(url=member.display_avatar.url)
         await ctx.send(embed=embed)
 
-    # ---------------- STATUS / DIAGNOSTICS ----------------
-    @commands.command(name="status", aliases=["health"])
-    @commands.guild_only()
+    # ================= SYSTEM DIAGNOSTICS =================
+
+    @commands.command(name="status", aliases=["health", "sysinfo"])
     @require_level(1)
     async def status(self, ctx: commands.Context):
-        """High-Fidelity System Diagnostics"""
+        """Real-time bot and hardware health analysis"""
         uptime = datetime.utcnow() - self.start_time
         h, r = divmod(int(uptime.total_seconds()), 3600)
         m, s = divmod(r, 60)
 
-        # Hardware monitoring protection
+        # Hardware metrics with PSUTIL protection
         if PSUTIL_AVAILABLE:
             cpu = f"{psutil.cpu_percent()}%"
             ram = f"{round(self.process.memory_info().rss / 1024 / 1024, 2)} MB"
         else:
-            cpu = ram = "N/A"
+            cpu = ram = "N/A (Missing psutil)"
 
         embed = luxury_embed(
-            title="📊 Ultimate System Health",
+            title="📊 Universal System Health",
             description=(
                 f"⏱ **Uptime:** `{h}h {m}m {s}s`\n"
                 f"🛰 **Gateway:** `{round(self.bot.latency * 1000)}ms`\n\n"
-                f"🧠 **RAM:** `{ram}` | ⚡ **CPU:** `{cpu}`\n\n"
-                f"🛡 **AutoMod:** {'`🟢 ON`' if state.SYSTEM_FLAGS['automod_enabled'] else '`🔴 OFF`'}\n"
-                f"🚨 **Panic:** {'`🔴 ACTIVE`' if state.SYSTEM_FLAGS['panic_mode'] else '`🟢 CLEAR`'}"
+                f"🧠 **RAM Consumption:** `{ram}`\n"
+                f"⚡ **CPU Usage:** `{cpu}`\n\n"
+                f"🛡 **AutoMod:** `{'🟢 ON' if state.SYSTEM_FLAGS['automod_enabled'] else '🔴 OFF'}`\n"
+                f"🚨 **Panic Mode:** `{'🔴 ACTIVE' if state.SYSTEM_FLAGS['panic_mode'] else '🟢 CLEAR'}`"
             ),
             color=COLOR_SECONDARY
         )
         await ctx.send(embed=embed)
 
-    # ---------------- AVATAR ----------------
-    @commands.command(name="avatar", aliases=["av"])
+    # ================= UTILITIES (AVATAR, PING, PURGE) =================
+
+    @commands.command(name="avatar", aliases=["av", "pfp"])
     async def avatar(self, ctx: commands.Context, member: discord.Member = None):
         """Fetch HD profile media"""
         member = member or ctx.author
-        url = member.display_avatar.url
-        embed = luxury_embed(f"🖼️ {member.name}'s Avatar", f"[Direct HD Link]({url})", COLOR_GOLD)
+        url = member.display_avatar.with_static_format("png").url
+        embed = luxury_embed(f"🖼️ {member.name}", f"[Direct HD Link]({url})", COLOR_GOLD)
         embed.set_image(url=url)
         await ctx.send(embed=embed)
 
-    # ---------------- PURGE ----------------
-    @commands.command(name="purge", aliases=["clear"])
-    @commands.guild_only()
+    @commands.command(name="ping")
+    async def ping(self, ctx: commands.Context):
+        """Test API/Gateway latency"""
+        start = time.perf_counter()
+        message = await ctx.send("🛰️ Measuring...")
+        end = time.perf_counter()
+        lat = round((end - start) * 1000)
+        await message.edit(content=None, embed=luxury_embed("🛰️ Connectivity", f"**REST API:** `{lat}ms`\n**Gateway:** `{round(self.bot.latency*1000)}ms`", COLOR_GOLD))
+
+    @commands.command(name="purge")
     @require_level(3)
     async def purge(self, ctx: commands.Context, amount: int):
         """Sanitize channel messages"""
@@ -222,37 +260,27 @@ class System(commands.Cog):
         await asyncio.sleep(4)
         await msg.delete()
 
-    # ---------------- PING ----------------
-    @commands.command(name="ping")
-    async def ping(self, ctx: commands.Context):
-        """Test API/Gateway cycles"""
-        start = time.perf_counter()
-        message = await ctx.send("🛰️ Measuring...")
-        end = time.perf_counter()
-        lat = round((end - start) * 1000)
-        await message.edit(content=None, embed=luxury_embed("🛰️ Latency", f"**REST:** `{lat}ms`\n**WS:** `{round(self.bot.latency*1000)}ms`", COLOR_GOLD))
+    # ================= PANIC PROTOCOLS =================
 
-    # ---------------- PANIC PROTOCOLS ----------------
     @commands.command()
     @require_level(4)
     async def panic(self, ctx: commands.Context):
         state.SYSTEM_FLAGS["panic_mode"] = True
-        await ctx.send(embed=luxury_embed("🚨 PANIC ACTIVE", "Server lockdown initiated.", COLOR_DANGER))
+        await ctx.send(embed=luxury_embed("🚨 PANIC MODE ENGAGED", "Global Lockdown Active. Permissions Restricted.", COLOR_DANGER))
 
     @commands.command()
     @require_level(4)
     async def unpanic(self, ctx: commands.Context):
         state.SYSTEM_FLAGS["panic_mode"] = False
-        await ctx.send(embed=luxury_embed("✅ PANIC LIFTED", "Standard operations resumed.", COLOR_GOLD))
+        await ctx.send(embed=luxury_embed("✅ PANIC MODE LIFTED", "Standard Operations Resumed.", COLOR_GOLD))
 
 # =====================================================
-# SAFE SETUP (PREVENTS REGISTRATION ERRORS)
+# SAFE SETUP (CRASH PREVENTION)
 # =====================================================
 async def setup(bot: commands.Bot):
-    # This list removes existing commands from other files before loading this cog
-    # to prevent the "CommandRegistrationError"
-    conflicting_cmds = ['help', 'role', 'whois', 'status', 'avatar', 'purge', 'ping']
-    for cmd in conflicting_cmds:
+    # Pre-load cleanup to avoid CommandRegistrationError
+    conflicting = ['help', 'role', 'whois', 'status', 'avatar', 'purge', 'ping']
+    for cmd in conflicting:
         if bot.get_command(cmd):
             bot.remove_command(cmd)
             
