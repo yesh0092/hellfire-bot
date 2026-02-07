@@ -4,6 +4,8 @@ import logging
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
+from datetime import datetime
+import pytz  # Ensure pytz is in your requirements.txt and installed
 
 from utils import state
 from utils.embeds import luxury_embed
@@ -12,17 +14,12 @@ from utils.config import COLOR_DANGER
 # =====================================================
 # LOGGING (CLEAN & QUIET)
 # =====================================================
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
 )
 
-for noisy in (
-    "discord",
-    "discord.http",
-    "discord.gateway",
-):
+for noisy in ("discord", "discord.http", "discord.gateway"):
     logging.getLogger(noisy).setLevel(logging.WARNING)
 
 print("🔥 HellFire Hangout | Python Process Started")
@@ -30,7 +27,6 @@ print("🔥 HellFire Hangout | Python Process Started")
 # =====================================================
 # ENVIRONMENT
 # =====================================================
-
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 
@@ -40,7 +36,6 @@ if not TOKEN:
 # =====================================================
 # INTENTS (FULL — NO SHORTCUTS)
 # =====================================================
-
 intents = discord.Intents.default()
 intents.guilds = True
 intents.members = True
@@ -52,26 +47,18 @@ intents.dm_messages = True
 # =====================================================
 # BOT INITIALIZATION
 # =====================================================
-
 bot = commands.Bot(
     command_prefix="&",
     intents=intents,
-    help_command=None,
-    # ENHANCEMENT: Initial status while cogs load
-    activity=discord.Activity(type=discord.ActivityType.watching, name="System Booting... ⛩️")
+    help_command=None
+    # Initial activity removed to prevent fighting with the clock cog
 )
 
 # =====================================================
 # GLOBAL COMMAND GUARDS
 # =====================================================
-
 @bot.check
 async def block_commands_in_dm(ctx: commands.Context) -> bool:
-    """
-    HARD BLOCK:
-    - No commands in DMs
-    - DM messages still reach onboarding/support via on_message
-    """
     if ctx.guild is None:
         try:
             await ctx.send(
@@ -90,13 +77,8 @@ async def block_commands_in_dm(ctx: commands.Context) -> bool:
         return False
     return True
 
-
 @bot.check
 async def staff_permission_guard(ctx: commands.Context) -> bool:
-    """
-    Enforces staff hierarchy using @require_level
-    Owner & Administrator override always allowed
-    """
     if not ctx.command:
         return True
 
@@ -111,7 +93,7 @@ async def staff_permission_guard(ctx: commands.Context) -> bool:
         return True
 
     highest_level = 0
-    # ENHANCEMENT: Safety check for state initialization
+    # Safety check for state initialization
     tiers = getattr(state, "STAFF_ROLE_TIERS", {})
     for level, role_id in tiers.items():
         if role_id and any(role.id == role_id for role in ctx.author.roles):
@@ -133,12 +115,9 @@ async def staff_permission_guard(ctx: commands.Context) -> bool:
 # =====================================================
 # ERROR HANDLER (SAFE & SILENT)
 # =====================================================
-
 @bot.event
 async def on_command_error(ctx: commands.Context, error: Exception):
-    if isinstance(error, commands.CommandNotFound):
-        return
-    if isinstance(error, commands.CheckFailure):
+    if isinstance(error, (commands.CommandNotFound, commands.CheckFailure)):
         return
     if isinstance(error, commands.MissingRequiredArgument):
         await ctx.send("⚠️ Missing required arguments.", delete_after=5)
@@ -147,69 +126,30 @@ async def on_command_error(ctx: commands.Context, error: Exception):
         await ctx.send("⚠️ Invalid argument provided.", delete_after=5)
         return
 
-    # Log unexpected errors (do NOT swallow)
     raise error
 
 # =====================================================
 # MESSAGE ROUTER (CRITICAL)
 # =====================================================
-
 @bot.event
 async def on_message(message: discord.Message):
-    """
-    This is the CORE MESSAGE PIPELINE.
-    DO NOT block anything here.
-    """
     if message.author.bot:
         return
-
-    # DM messages must reach:
-    # - Support system
-    # - Onboarding
-    # - Future DM features
     await bot.process_commands(message)
 
 # =====================================================
 # COG LOADER (ORDER MATTERS)
 # =====================================================
-
 COGS = [
-    # Core infrastructure
-    "cogs.admin",
-    "cogs.system",
-    "cogs.botlog",
-    "cogs.audit",
-
-    # Moderation & security
-    "cogs.moderation",
-    "cogs.warnsystem",
-    "cogs.security",
-    "cogs.automod",
-
-    # Staff intelligence
-    "cogs.staff",
-
-    # Support & onboarding
-    "cogs.support",
-    "cogs.onboarding",
-    "cogs.announce",
-
-    # Activity & engagement
-    "cogs.message_tracker",
-    "cogs.profile",
-    "cogs.weeklymvp",
-    "cogs.dashboard",
-
-    # Voice
-    "cogs.voice_system",
-
-    # Clock (Minimalist Anime Clock)
-    "cogs.clock",
+    "cogs.admin", "cogs.system", "cogs.botlog", "cogs.audit",
+    "cogs.moderation", "cogs.warnsystem", "cogs.security", "cogs.automod",
+    "cogs.staff", "cogs.support", "cogs.onboarding", "cogs.announce",
+    "cogs.message_tracker", "cogs.profile", "cogs.weeklymvp", "cogs.dashboard",
+    "cogs.voice_system", "cogs.clock"
 ]
 
 async def load_cogs():
     for cog in COGS:
-        # ENHANCEMENT: Prevent loading already loaded extensions
         if cog in bot.extensions:
             continue
         try:
@@ -221,28 +161,38 @@ async def load_cogs():
 # =====================================================
 # LIFECYCLE EVENTS
 # =====================================================
-
 @bot.event
 async def setup_hook():
-    print("⚙️ setup_hook started")
+    print("⚙️ setup_hook: Loading Extensions")
     await load_cogs()
 
 @bot.event
 async def on_ready():
     print("---" * 10)
-    print("🟢 BOT ONLINE")
-    print(f"👤 Logged in as: {bot.user}")
-    print(f"📦 Loaded cogs: {len(bot.cogs)}")
-    print("🛡️ Staff permission system active")
-    print("💬 DM support system online")
-    print("🔊 Voice system ready")
+    print(f"🟢 BOT ONLINE: {bot.user}")
+    
+    # ENHANCEMENT: Forced Clock Sync immediately on login
+    try:
+        # Using pytz to get accurate IST time
+        tz = pytz.timezone('Asia/Kolkata')
+        time_str = datetime.now(tz).strftime("%I:%M %p")
+        await bot.change_presence(
+            activity=discord.Activity(
+                type=discord.ActivityType.watching, 
+                name=f"⛩️ {time_str} | HellFire"
+            )
+        )
+        print(f"🕒 Clock Force-Synced (IST): {time_str}")
+    except Exception as e:
+        print(f"⚠️ Initial Clock Sync Failed: {e}")
+
+    print(f"📦 Active Cogs: {len(bot.cogs)}")
     print("🔥 HellFire Hangout is LIVE")
     print("---" * 10)
 
 # =====================================================
 # ENTRYPOINT
 # =====================================================
-
 async def main():
     print("🚀 Starting bot login sequence")
     async with bot:
@@ -252,4 +202,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("🛑 HellFire Hangout Process Terminated.")
+        print("🛑 Process terminated by user.")
