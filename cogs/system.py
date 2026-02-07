@@ -19,9 +19,9 @@ class HelpDropdown(ui.Select):
         self.bot = bot
         options = [
             discord.SelectOption(label="Admin & Setup", emoji="⚙️", description="Server configuration & auto-systems", value="admin"),
-            discord.SelectOption(label="Moderation", emoji="🛡️", description="Bans, Kicks, Timeouts & Automod", value="mod"),
-            discord.SelectOption(label="Support System", emoji="🛎️", description="Ticket system & DM interaction", value="support"),
-            discord.SelectOption(label="Activity & Stats", emoji="📊", description="Profiles, MVP & Message tracking", value="stats"),
+            discord.SelectOption(label="Ultimate Moderation", emoji="🛡️", description="Bans, Risk Analysis & Warn Progression", value="mod"),
+            discord.SelectOption(label="Ultimate Support", emoji="🛎️", description="Transcripts, Claiming & Priority Tickets", value="support"),
+            discord.SelectOption(label="Activity & Stats", emoji="📊", description="Profiles, MVP & Staff Analytics", value="stats"),
             discord.SelectOption(label="Voice System", emoji="🎙️", description="24/7 Voice & status tracking", value="voice"),
         ]
         super().__init__(placeholder="🌌 Select a Department to view commands...", min_values=1, max_values=1, options=options)
@@ -29,7 +29,7 @@ class HelpDropdown(ui.Select):
     async def callback(self, interaction: discord.Interaction):
         selection = self.values[0]
         
-        # Mapping categories to content
+        # Mapping categories to content (Enhanced with new features)
         pages = {
             "admin": {
                 "title": "⚙️ Admin & Setup Commands",
@@ -37,39 +37,41 @@ class HelpDropdown(ui.Select):
                     f"**{BOT_PREFIX}setup**\nRun full server environment setup.\n\n"
                     f"**{BOT_PREFIX}welcome** / **{BOT_PREFIX}unwelcome**\nToggle the automated welcome system.\n\n"
                     f"**{BOT_PREFIX}autorole <role>** / **{BOT_PREFIX}unautorole**\nManage roles assigned to joining members.\n\n"
-                    f"**{BOT_PREFIX}supportlog** / **{BOT_PREFIX}unsupportlog**\nConfigure where ticket logs are sent."
+                    f"**{BOT_PREFIX}supportlog**\nSet the channel for ticket transcripts & logs."
                 )
             },
             "mod": {
-                "title": "🛡️ Moderation & Security",
+                "title": "🛡️ Ultimate Moderation & Intelligence",
                 "desc": (
-                    f"**{BOT_PREFIX}warn @user <reason>**\nAssign a formal warning.\n\n"
-                    f"**{BOT_PREFIX}timeout @user <min> <reason>**\nTemporary mute via Discord native timeout.\n\n"
-                    f"**{BOT_PREFIX}kick @user <reason>**\nRemove member from the server.\n\n"
-                    f"**{BOT_PREFIX}ban @user <reason>**\nPermanent removal and blacklist.\n\n"
-                    "**Hierarchy Escalation:**\n"
-                    "• 3 Warnings → 24h Timeout\n"
-                    "• 5 Warnings → Immediate Kick"
+                    f"**{BOT_PREFIX}warn @user <reason>**\nAssign warning with auto-escalation.\n\n"
+                    f"**{BOT_PREFIX}warnstats @user**\nView **Risk Level**, **Velocity**, and **Progress Bar**.\n\n"
+                    f"**{BOT_PREFIX}warnhistory @user**\nView detailed audit trail of all violations.\n\n"
+                    f"**{BOT_PREFIX}timeout / kick / ban**\nStandard enforcement commands.\n\n"
+                    "**God-Mode Intelligence:**\n"
+                    "• Visual Progress: `🟥🟥🟥⬜⬜` (Warns/8)\n"
+                    "• Velocity: Alerts staff to rapid rule-breakers."
                 )
             },
             "support": {
-                "title": "🛎️ Support & System Control",
+                "title": "🛎️ Ultimate Support System",
                 "desc": (
-                    f"**{BOT_PREFIX}status**\nCheck system uptime and module health.\n\n"
-                    f"**{BOT_PREFIX}automod <on|off|status>**\nToggle the silent security layer.\n\n"
-                    f"**{BOT_PREFIX}panic** / **{BOT_PREFIX}unpanic**\nEmergency lockdown protocol.\n\n"
-                    "**User Support:**\n"
-                    "• Users can DM the bot directly to open a ticket."
+                    f"**DM the Bot**\nSelect Priority (Low/Med/High) to open a ticket.\n\n"
+                    "**Ticket Controls (Buttons):**\n"
+                    "• 🙋‍♂️ **Claim:** Staff can claim to manage the user.\n"
+                    "• 🔒 **Close:** Generates a full **Transcript (.txt)** log.\n\n"
+                    "**Automated Systems:**\n"
+                    "• **Ghost-Tracking:** Updates activity on every message.\n"
+                    "• **Auto-Archive:** Inactive tickets log & delete after 24h."
                 )
             },
             "stats": {
-                "title": "📊 Profile & Engagement",
+                "title": "📊 Analytics & Engagement",
                 "desc": (
-                    f"**{BOT_PREFIX}profile [@user]**\nView detailed activity and join stats.\n\n"
-                    f"**{BOT_PREFIX}warnstats @user**\nView infraction history for a member.\n\n"
-                    f"**{BOT_PREFIX}staff**\nTrack staff activity and abuse alerts.\n\n"
-                    "**Automated MVP:**\n"
-                    "• Weekly top-talker role is auto-assigned."
+                    f"**{BOT_PREFIX}profile [@user]**\nView activity and join stats.\n\n"
+                    f"**{BOT_PREFIX}warnboard**\nTop offenders & **Staff Enforcer Metrics**.\n\n"
+                    f"**{BOT_PREFIX}mywarns**\nUser-safe account health check.\n\n"
+                    "**Efficiency Layer:**\n"
+                    "• **Auto-Pruning:** Background cleanup of stale data."
                 )
             },
             "voice": {
@@ -85,7 +87,7 @@ class HelpDropdown(ui.Select):
         page = pages[selection]
         embed = luxury_embed(
             title=page["title"],
-            description=page["desc"] + "\n\n━━━━━━━━━━━━━━━━━━━━━━\n_Silent • Intelligent • Elite Automation_",
+            description=page["desc"] + "\n\n━━━━━━━━━━━━━━━━━━━━━━\n_Ultimate • Intelligent • Elite Automation_",
             color=COLOR_GOLD
         )
         
@@ -128,16 +130,16 @@ class System(commands.Cog):
     async def help(self, ctx: commands.Context):
         """The New Interactive Help Dashboard"""
         embed = luxury_embed(
-            title="🌌 HellFire Hangout — COMPLETE COMMAND GUIDE",
+            title="🌌 HellFire Hangout — ULTIMATE MANUAL",
             description=(
-                "This is the **official system manual**.\n"
-                "Please select a department from the dropdown menu below to view available commands.\n\n"
+                "Welcome to the **Unified Intelligence Dashboard**.\n"
+                "The system has been upgraded with **God-Mode** analytics.\n\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
-                "🔑 **BASIC INFORMATION**\n"
+                "🔑 **CORE STATS**\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
                 f"• Prefix: `{BOT_PREFIX}`\n"
-                "• Interaction Mode: `Slash & Prefix`\n"
-                "• Operational Status: `🟢 Healthy`"
+                f"• Intelligence Level: `Ultimate`\n"
+                "• Operational Status: `🟢 100% Functional`"
             ),
             color=COLOR_GOLD
         )
@@ -157,20 +159,20 @@ class System(commands.Cog):
         h, r = divmod(int(uptime.total_seconds()), 3600)
         m, s = divmod(r, 60)
 
-        await ctx.send(
-            embed=luxury_embed(
-                title="📊 System Status",
-                description=(
-                    f"🟢 Online\n"
-                    f"⏱ Uptime: {h}h {m}m {s}s\n\n"
-                    f"🛡 AutoMod: {'ON' if state.SYSTEM_FLAGS['automod_enabled'] else 'OFF'}\n"
-                    f"🚨 Panic Mode: {'ON' if state.SYSTEM_FLAGS['panic_mode'] else 'OFF'}\n"
-                    f"🏆 MVP System: {'ON' if state.SYSTEM_FLAGS['mvp_system'] else 'OFF'}\n\n"
-                    f"🧠 Loaded Cogs: {len(self.bot.cogs)}"
-                ),
-                color=COLOR_SECONDARY
-            )
+        # Build dynamic status
+        embed = luxury_embed(
+            title="📊 Ultimate System Health",
+            description=(
+                f"⏱ **Uptime:** `{h}h {m}m {s}s`\n"
+                f"🧠 **Memory Threads:** `Active`\n\n"
+                f"🛡 **AutoMod:** {'`🟢 ACTIVE`' if state.SYSTEM_FLAGS['automod_enabled'] else '`🔴 DISABLED`'}\n"
+                f"🚨 **Panic Mode:** {'`🔴 ON`' if state.SYSTEM_FLAGS['panic_mode'] else '`🟢 OFF`'}\n"
+                f"🏆 **MVP Tracker:** {'`🟢 ON`' if state.SYSTEM_FLAGS['mvp_system'] else '`⚪ OFF`'}\n\n"
+                f"🧩 **Total Modules:** `{len(self.bot.cogs)}`"
+            ),
+            color=COLOR_SECONDARY
         )
+        await ctx.send(embed=embed)
 
     # ==================================================
     # AUTOMOD CONTROL
@@ -183,34 +185,25 @@ class System(commands.Cog):
         if not mode:
             return await ctx.send(
                 embed=luxury_embed(
-                    title="⚙️ AutoMod Usage",
+                    title="⚙️ AutoMod Control",
                     description=(
-                        f"`{BOT_PREFIX}automod on`\n"
-                        f"`{BOT_PREFIX}automod off`\n"
-                        f"`{BOT_PREFIX}automod status`"
+                        f"`{BOT_PREFIX}automod on` - Enable shield\n"
+                        f"`{BOT_PREFIX}automod off` - Disable shield\n"
+                        f"`{BOT_PREFIX}automod status` - View health"
                     ),
                     color=COLOR_SECONDARY
                 )
             )
 
         mode = mode.lower()
-
         if mode == "on":
             state.SYSTEM_FLAGS["automod_enabled"] = True
-            await ctx.send(luxury_embed("🛡️ AutoMod Enabled", "System is active.", color=COLOR_GOLD))
-
+            await ctx.send(luxury_embed("🛡️ AutoMod Enabled", "Global security layer is now active.", color=COLOR_GOLD))
         elif mode == "off":
             state.SYSTEM_FLAGS["automod_enabled"] = False
-            await ctx.send(luxury_embed("⛔ AutoMod Disabled", "System is paused.", color=COLOR_DANGER))
-
+            await ctx.send(luxury_embed("⛔ AutoMod Disabled", "Security protocol is now paused.", color=COLOR_DANGER))
         elif mode == "status":
-            await ctx.send(
-                luxury_embed(
-                    "🛡️ AutoMod Status",
-                    f"State: {'ON' if state.SYSTEM_FLAGS['automod_enabled'] else 'OFF'}",
-                    color=COLOR_SECONDARY
-                )
-            )
+            await ctx.send(luxury_embed("🛡️ AutoMod Status", f"Current: {'ACTIVE' if state.SYSTEM_FLAGS['automod_enabled'] else 'DISABLED'}", COLOR_SECONDARY))
 
     # ==================================================
     # PANIC MODE
@@ -221,15 +214,14 @@ class System(commands.Cog):
     @require_level(4)
     async def panic(self, ctx: commands.Context):
         state.SYSTEM_FLAGS["panic_mode"] = True
-        await ctx.send(luxury_embed("🚨 Panic Mode Enabled", "Maximum protection active.", color=COLOR_DANGER))
+        await ctx.send(luxury_embed("🚨 PANIC MODE ACTIVATED", "Lockdown initiated. Permissions restricted.", color=COLOR_DANGER))
 
     @commands.command()
     @commands.guild_only()
     @require_level(4)
     async def unpanic(self, ctx: commands.Context):
         state.SYSTEM_FLAGS["panic_mode"] = False
-        await ctx.send(luxury_embed("✅ Panic Mode Disabled", "Normal operation restored.", color=COLOR_GOLD))
-
+        await ctx.send(luxury_embed("✅ PANIC MODE DEACTIVATED", "Lockdown lifted. Resuming normal operations.", color=COLOR_GOLD))
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(System(bot))
