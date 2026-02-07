@@ -30,7 +30,8 @@ class Profile(commands.Cog):
     # IDENTITY COMMAND
     # =====================================================
 
-    @commands.command(name="profile", aliases=["userinfo", "whois", "ui"])
+    # REMOVED aliases "userinfo" and "whois" as they are in system.py
+    @commands.command(name="profile", aliases=["ui"])
     @commands.guild_only()
     @commands.cooldown(1, 5, commands.BucketType.user)
     async def profile(self, ctx: commands.Context, member: discord.Member = None):
@@ -129,7 +130,6 @@ class Profile(commands.Cog):
             color=COLOR_GOLD
         )
         
-        # Logic to show Global vs Server avatar if they differ
         embed.set_image(url=member.display_avatar.with_size(1024).url)
         
         if member.guild_avatar:
@@ -144,7 +144,6 @@ class Profile(commands.Cog):
         """Displays a user's banner (if they have one)"""
         member = member or ctx.author
         
-        # Fetch full user object to get the banner
         user = await self.bot.fetch_user(member.id)
         
         if not user.banner:
@@ -160,4 +159,9 @@ class Profile(commands.Cog):
         await ctx.send(embed=embed)
 
 async def setup(bot: commands.Bot):
+    # Safety: Remove collisions before loading
+    for cmd in ["profile", "ui", "avatar", "av", "pfp", "banner"]:
+        if bot.get_command(cmd):
+            bot.remove_command(cmd)
+            
     await bot.add_cog(Profile(bot))
