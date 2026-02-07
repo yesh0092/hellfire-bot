@@ -56,7 +56,9 @@ intents.dm_messages = True
 bot = commands.Bot(
     command_prefix="&",
     intents=intents,
-    help_command=None
+    help_command=None,
+    # ENHANCEMENT: Initial status while cogs load
+    activity=discord.Activity(type=discord.ActivityType.watching, name="System Booting... ⛩️")
 )
 
 # =====================================================
@@ -109,7 +111,9 @@ async def staff_permission_guard(ctx: commands.Context) -> bool:
         return True
 
     highest_level = 0
-    for level, role_id in state.STAFF_ROLE_TIERS.items():
+    # ENHANCEMENT: Safety check for state initialization
+    tiers = getattr(state, "STAFF_ROLE_TIERS", {})
+    for level, role_id in tiers.items():
         if role_id and any(role.id == role_id for role in ctx.author.roles):
             highest_level = max(highest_level, level)
 
@@ -199,11 +203,15 @@ COGS = [
     # Voice
     "cogs.voice_system",
 
+    # Clock (Minimalist Anime Clock)
     "cogs.clock",
 ]
 
 async def load_cogs():
     for cog in COGS:
+        # ENHANCEMENT: Prevent loading already loaded extensions
+        if cog in bot.extensions:
+            continue
         try:
             await bot.load_extension(cog)
             print(f"✅ Loaded {cog}")
@@ -221,6 +229,7 @@ async def setup_hook():
 
 @bot.event
 async def on_ready():
+    print("---" * 10)
     print("🟢 BOT ONLINE")
     print(f"👤 Logged in as: {bot.user}")
     print(f"📦 Loaded cogs: {len(bot.cogs)}")
@@ -228,6 +237,7 @@ async def on_ready():
     print("💬 DM support system online")
     print("🔊 Voice system ready")
     print("🔥 HellFire Hangout is LIVE")
+    print("---" * 10)
 
 # =====================================================
 # ENTRYPOINT
@@ -239,5 +249,7 @@ async def main():
         await bot.start(TOKEN)
 
 if __name__ == "__main__":
-    asyncio.run(main())
-
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("🛑 HellFire Hangout Process Terminated.")
