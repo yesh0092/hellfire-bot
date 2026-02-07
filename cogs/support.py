@@ -24,12 +24,18 @@ STAFF_ROLE_NAMES = ("Staff", "Staff+", "Staff++", "Staff+++", "Admin")
 # TICKET UTILS
 # =====================================================
 async def generate_transcript(channel: discord.TextChannel):
+    """Fetches all messages and formats them into a string for the .txt file."""
     messages = []
     async for msg in channel.history(limit=None, oldest_first=True):
         timestamp = msg.created_at.strftime("%Y-%m-%d %H:%M:%S")
         content = msg.content if msg.content else "[No Text Content/Attachment]"
         messages.append(f"[{timestamp}] {msg.author.name}: {content}")
-    return "\n".join(messages)
+    
+    header = f"--- HELLFIRE TICKET TRANSCRIPT: {channel.name} ---\n"
+    header += f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+    header += "------------------------------------------------\n\n"
+    
+    return header + "\n".join(messages)
 
 # =====================================================
 # CATEGORY SELECTION VIEW (Inside Ticket)
@@ -45,16 +51,16 @@ class TicketCategoryView(discord.ui.View):
 
         await interaction.response.defer()
 
-        # Rename channel
+        # Rename channel based on selection
         new_name = f"{category_name.lower()}-{self.owner.name}"
         await interaction.channel.edit(name=new_name)
 
-        # Get role mapping from state
+        # Get role mapping from state.py
         role_map = getattr(state, "TICKET_ROLES", {})
         role_id = role_map.get(category_name)
         ping_text = f"<@&{role_id}>" if role_id else "@here"
 
-        # Disable buttons
+        # Disable selection buttons after use
         for child in self.children:
             child.disabled = True
         
@@ -88,7 +94,7 @@ class TicketCategoryView(discord.ui.View):
         await self._handle_selection(interaction, "Others")
 
 # =====================================================
-# TICKET CONTROL VIEW
+# TICKET CONTROL VIEW (Staff Actions)
 # =====================================================
 class TicketControlView(discord.ui.View):
     def __init__(self, owner_id: int):
@@ -122,20 +128,25 @@ class TicketControlView(discord.ui.View):
     @discord.ui.button(label="Close Ticket", emoji="🔒", style=discord.ButtonStyle.danger)
     async def close_ticket(self, interaction: discord.Interaction, _):
         await interaction.response.send_message("🔒 **Archiving and closing...**", ephemeral=True)
+        
         txt = await generate_transcript(interaction.channel)
         file = discord.File(io.BytesIO(txt.encode()), filename=f"transcript-{interaction.channel.name}.txt")
 
-        if getattr(state, "BOT_LOG_CHANNEL_ID", None):
-            log_channel = interaction.guild.get_channel(state.BOT_LOG_CHANNEL_ID)
+        # Send to the configured Bot Log channel
+        log_id = getattr(state, "BOT_LOG_CHANNEL_ID", None)
+        if log_id:
+            log_channel = interaction.guild.get_channel(log_id)
             if log_channel:
                 await log_channel.send(embed=luxury_embed(
                     title="📂 Ticket Archived",
-                    description=f"**Ticket:** {interaction.channel.name}\n**Owner:** <@{self.owner_id}>\n**Closed by:** {interaction.user.mention}",
+                    description=f"**Ticket:** `{interaction.channel.name}`\n**Owner:** <@{self.owner_id}>\n**Closed by:** {interaction.user.mention}",
                     color=COLOR_SECONDARY
                 ), file=file)
 
+        # Clear Bot Memory
         state.TICKET_META.pop(interaction.channel.id, None)
         state.OPEN_TICKETS.pop(self.owner_id, None)
+        
         await asyncio.sleep(3)
         await interaction.channel.delete()
 
@@ -149,19 +160,17 @@ class DMConfirmView(discord.ui.View):
 
     @discord.ui.button(label="Yes, Open Ticket", style=discord.ButtonStyle.success, emoji="✅")
     async def confirm(self, interaction: discord.Interaction, _):
-        # Prevent "Interaction Failed"
         await interaction.response.defer(ephemeral=True)
 
         if self.user.id in state.OPEN_TICKETS:
             return await interaction.followup.send("❌ You already have an open ticket.", ephemeral=True)
 
-        # GET GUILD WITH FALLBACK
         guild = interaction.client.get_guild(state.MAIN_GUILD_ID)
         if not guild:
             try:
                 guild = await interaction.client.fetch_guild(state.MAIN_GUILD_ID)
             except:
-                return await interaction.followup.send("❌ Error: Could not find server. Check MAIN_GUILD_ID.", ephemeral=True)
+                return await interaction.followup.send("❌ Error: Could not find server. Verify MAIN_GUILD_ID in state.py", ephemeral=True)
 
         try:
             category = discord.utils.get(guild.categories, name=SUPPORT_CATEGORY_NAME) or await guild.create_category(SUPPORT_CATEGORY_NAME)
@@ -183,28 +192,36 @@ class DMConfirmView(discord.ui.View):
 
             state.OPEN_TICKETS[self.user.id] = channel.id
             
-            # 1. Staff Control Panel
-            await channel.send(embed=luxury_embed(title="🎫 Support Control", description="Staff use the buttons below.", color=COLOR_GOLD), view=TicketControlView(self.user.id))
+            # Send the static Control Panel (Staff)
+            await channel.send(
+                embed=luxury_embed(title="🎫 Support Control", description="Staff actions are below.", color=COLOR_GOLD), 
+                view=TicketControlView(self.user.id)
+            )
 
-            # 2. User Category Question
-            await channel.send(content=self.user.mention, embed=luxury_embed(title="🛎️ How can we help you?", description="Please select a category below so we can ping the right staff.", color=COLOR_GOLD), view=TicketCategoryView(self.user))
+            # Send the Category Selection (User)
+            await channel.send(
+                content=f"Welcome {self.user.mention}!",
+                embed=luxury_embed(title="🛎️ How can we help you?", description="Please select a category below to alert the correct staff.", color=COLOR_GOLD), 
+                view=TicketCategoryView(self.user)
+            )
 
             state.TICKET_META[channel.id] = {
                 "owner": self.user.id,
                 "created_at": datetime.utcnow(),
                 "last_activity": datetime.utcnow()
             }
+
             await interaction.followup.send(f"✅ **Ticket Created!** {channel.mention}", ephemeral=True)
             await interaction.message.edit(view=None)
 
         except discord.Forbidden:
-            await interaction.followup.send("❌ Bot lacks permissions to create channels.", ephemeral=True)
+            await interaction.followup.send("❌ Bot lacks permission to manage channels.", ephemeral=True)
         except Exception as e:
-            await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
+            await interaction.followup.send(f"❌ Error during creation: {e}", ephemeral=True)
 
     @discord.ui.button(label="No, Cancel", style=discord.ButtonStyle.danger, emoji="❌")
     async def cancel(self, interaction: discord.Interaction, _):
-        await interaction.response.edit_message(content="❌ Support request cancelled.", embed=None, view=None)
+        await interaction.response.edit_message(content="❌ Request cancelled.", view=None, embed=None)
 
 # =====================================================
 # SUPPORT COG
@@ -212,13 +229,14 @@ class DMConfirmView(discord.ui.View):
 class Support(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        # Safety init
+        # Ensure state variables exist
         if not hasattr(state, "OPEN_TICKETS"): state.OPEN_TICKETS = {}
         if not hasattr(state, "TICKET_META"): state.TICKET_META = {}
         if not hasattr(state, "DM_SUPPORT_SESSIONS"): state.DM_SUPPORT_SESSIONS = {}
 
     async def cog_load(self):
-        self.ticket_watcher.start()
+        if not self.ticket_watcher.is_running():
+            self.ticket_watcher.start()
 
     def cog_unload(self):
         self.ticket_watcher.cancel()
@@ -227,21 +245,23 @@ class Support(commands.Cog):
     async def on_message(self, message: discord.Message):
         if message.author.bot: return
 
+        # Track activity for auto-close
         if message.guild and message.channel.id in state.TICKET_META:
             state.TICKET_META[message.channel.id]["last_activity"] = datetime.utcnow()
 
+        # Handle DM Support Trigger
         if isinstance(message.channel, discord.DMChannel):
             user_id = message.author.id
             now = datetime.utcnow()
             
-            last = state.DM_SUPPORT_SESSIONS.get(user_id)
-            if last and now - last < DM_PANEL_EXPIRY:
+            last_session = state.DM_SUPPORT_SESSIONS.get(user_id)
+            if last_session and now - last_session < DM_PANEL_EXPIRY:
                 return
 
             await message.channel.send(
                 embed=luxury_embed(
                     title="🛎️ HellFire Support",
-                    description="Welcome. Would you like to open a support ticket in the server?",
+                    description="Would you like to open a support ticket in our server?",
                     color=COLOR_GOLD
                 ),
                 view=DMConfirmView(message.author)
@@ -250,6 +270,7 @@ class Support(commands.Cog):
 
     @tasks.loop(minutes=5)
     async def ticket_watcher(self):
+        """Auto-closes tickets that have been inactive for 24 hours."""
         now = datetime.utcnow()
         for channel_id, meta in list(state.TICKET_META.items()):
             diff = now - meta["last_activity"]
@@ -258,10 +279,11 @@ class Support(commands.Cog):
                 if channel:
                     try:
                         txt = await generate_transcript(channel)
-                        if getattr(state, "BOT_LOG_CHANNEL_ID", None):
-                            log = self.bot.get_channel(state.BOT_LOG_CHANNEL_ID)
-                            if log:
-                                await log.send(f"📁 **Auto-Archive:** {channel.name}", file=discord.File(io.BytesIO(txt.encode()), f"{channel.name}.txt"))
+                        log_id = getattr(state, "BOT_LOG_CHANNEL_ID", None)
+                        if log_id:
+                            log_ch = self.bot.get_channel(log_id)
+                            if log_ch:
+                                await log_ch.send(f"📁 **Auto-Archive (Inactivity):** {channel.name}", file=discord.File(io.BytesIO(txt.encode()), f"auto-{channel.name}.txt"))
                         await channel.delete()
                     except: pass
                 state.TICKET_META.pop(channel_id, None)
