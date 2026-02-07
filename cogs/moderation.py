@@ -116,7 +116,7 @@ class Moderation(commands.Cog):
         if message.author.bot or not message.guild:
             return
 
-        if not state.SYSTEM_FLAGS.get("automod_enabled", True):
+        if not getattr(state, "SYSTEM_FLAGS", {}).get("automod_enabled", True):
             return
 
         member = message.author
@@ -174,7 +174,7 @@ class Moderation(commands.Cog):
     async def warn(self, ctx, member: discord.Member, *, reason="No reason provided"):
         """Formally warns a user and escalates if necessary"""
         if self._invalid_target(ctx, member):
-            return await ctx.send(embed=luxury_embed("❌ Error", "Target is immune.", COLOR_DANGER))
+            return await ctx.send(embed=luxury_embed(title="❌ Error", description="Target is immune.", color=COLOR_DANGER))
 
         uid = member.id
         state.WARN_DATA[uid] = state.WARN_DATA.get(uid, 0) + 1
@@ -195,7 +195,7 @@ class Moderation(commands.Cog):
             )
         )
 
-        await ctx.send(embed=luxury_embed("⚠️ Warning Logged", f"{member.mention} has **{warns}** warnings.", COLOR_GOLD))
+        await ctx.send(embed=luxury_embed(title="⚠️ Warning Logged", description=f"{member.mention} has **{warns}** warnings.", color=COLOR_GOLD))
         await self._log(ctx, "⚠️ Warning Issued", f"User: {member.mention}\nMod: {ctx.author.mention}\nReason: {reason}\nTotal: {warns}")
         await self._handle_escalation(ctx, member, warns)
 
@@ -220,7 +220,7 @@ class Moderation(commands.Cog):
         logs = state.WARN_LOGS.get(uid, [])
 
         if not logs:
-            return await ctx.send(embed=luxury_embed("✅ Clean History", f"{member.mention} has no warnings.", COLOR_GOLD))
+            return await ctx.send(embed=luxury_embed(title="✅ Clean History", description=f"{member.mention} has no warnings.", color=COLOR_GOLD))
 
         desc = ""
         for i, log in enumerate(logs[-10:], 1): 
@@ -238,7 +238,7 @@ class Moderation(commands.Cog):
         """Resets all warnings for a user"""
         state.WARN_DATA[member.id] = 0
         state.WARN_LOGS[member.id] = []
-        await ctx.send(embed=luxury_embed("✅ Warnings Cleared", f"Reset history for {member.mention}", COLOR_GOLD))
+        await ctx.send(embed=luxury_embed(title="✅ Warnings Cleared", description=f"Reset history for {member.mention}", color=COLOR_GOLD))
 
     # =====================================================
     # TIMEOUT / UNTIMEOUT
@@ -249,14 +249,14 @@ class Moderation(commands.Cog):
     @require_level(2)
     async def timeout(self, ctx, member: discord.Member, minutes: int, *, reason="No reason provided"):
         if self._invalid_target(ctx, member):
-            return await ctx.send(embed=luxury_embed("❌ Error", "Cannot timeout staff.", COLOR_DANGER))
+            return await ctx.send(embed=luxury_embed(title="❌ Error", description="Cannot timeout staff.", color=COLOR_DANGER))
         await self._apply_timeout(ctx, member, minutes, reason)
 
     @commands.command(name="untimeout", aliases=["unmute"])
     @require_level(2)
     async def untimeout(self, ctx, member: discord.Member):
         await member.timeout(None)
-        await ctx.send(embed=luxury_embed("⏳ Timeout Removed", f"{member.mention} can now speak.", COLOR_GOLD))
+        await ctx.send(embed=luxury_embed(title="⏳ Timeout Removed", description=f"{member.mention} can now speak.", color=COLOR_GOLD))
 
     async def _apply_timeout(self, ctx, member, minutes: int, reason: str, silent=False, guild=None):
         target_guild = ctx.guild if ctx else guild
@@ -268,7 +268,7 @@ class Moderation(commands.Cog):
         await self._safe_dm(member, luxury_embed(title="⏳ Timeout Applied", description=f"⏱ **Duration:** {minutes}m\n📄 **Reason:** {reason}", color=COLOR_SECONDARY))
         await member.timeout(timedelta(minutes=minutes), reason=reason)
         if ctx and not silent:
-            await ctx.send(embed=luxury_embed("⏳ Timeout Executed", f"{member.mention} silenced for **{minutes}m**.", COLOR_GOLD))
+            await ctx.send(embed=luxury_embed(title="⏳ Timeout Executed", description=f"{member.mention} silenced for **{minutes}m**.", color=COLOR_GOLD))
         await self._log(target_guild, "⏳ Timeout", f"User: {member.mention}\nDuration: {minutes}m\nReason: {reason}")
 
     # =====================================================
@@ -280,16 +280,16 @@ class Moderation(commands.Cog):
     @require_level(3)
     async def kick(self, ctx, member: discord.Member, *, reason="No reason provided"):
         if self._invalid_target(ctx, member):
-            return await ctx.send(embed=luxury_embed("❌ Error", "Target immune.", COLOR_DANGER))
+            return await ctx.send(embed=luxury_embed(title="❌ Error", description="Target immune.", color=COLOR_DANGER))
         await self._apply_kick(ctx, member, reason)
 
     async def _apply_kick(self, ctx, member, reason: str):
         bot = self._bot_member(ctx.guild)
         if not bot.guild_permissions.kick_members: return
-        await self._safe_dm(member, luxury_embed("🚫 Kicked", f"📄 **Reason:** {reason}", COLOR_DANGER))
+        await self._safe_dm(member, luxury_embed(title="🚫 Kicked", description=f"📄 **Reason:** {reason}", color=COLOR_DANGER))
         await member.kick(reason=reason)
         if ctx:
-            await ctx.send(embed=luxury_embed("👢 Kicked", f"{member.mention} removed.", COLOR_GOLD))
+            await ctx.send(embed=luxury_embed(title="👢 Kicked", description=f"{member.mention} removed.", color=COLOR_GOLD))
             await self._log(ctx, "👢 Kick", f"User: {member}\nReason: {reason}")
 
     @commands.command(name="ban")
@@ -297,9 +297,9 @@ class Moderation(commands.Cog):
     @require_level(4)
     async def ban(self, ctx, member: discord.Member, *, reason="No reason provided"):
         if self._invalid_target(ctx, member): return
-        await self._safe_dm(member, luxury_embed("⛔ Banned", f"📄 **Reason:** {reason}", COLOR_DANGER))
+        await self._safe_dm(member, luxury_embed(title="⛔ Banned", description=f"📄 **Reason:** {reason}", color=COLOR_DANGER))
         await member.ban(reason=reason)
-        await ctx.send(embed=luxury_embed("⛔ Banned", f"{member.mention} blacklisted.", COLOR_GOLD))
+        await ctx.send(embed=luxury_embed(title="⛔ Banned", description=f"{member.mention} blacklisted.", color=COLOR_GOLD))
         await self._log(ctx, "⛔ Ban", f"User: {member}\nReason: {reason}")
 
     @commands.command(name="softban")
@@ -308,7 +308,7 @@ class Moderation(commands.Cog):
         if self._invalid_target(ctx, member): return
         await member.ban(reason=reason, delete_message_days=7)
         await ctx.guild.unban(member)
-        await ctx.send(embed=luxury_embed("🧼 Softbanned", f"Cleared messages for {member.mention}.", COLOR_GOLD))
+        await ctx.send(embed=luxury_embed(title="🧼 Softbanned", description=f"Cleared messages for {member.mention}.", color=COLOR_GOLD))
 
     @commands.command(name="unban")
     @require_level(4)
@@ -316,7 +316,7 @@ class Moderation(commands.Cog):
         try:
             user = await self.bot.fetch_user(user_id)
             await ctx.guild.unban(user)
-            await ctx.send(embed=luxury_embed("🔓 Unbanned", f"Restored access for {user.name}", COLOR_GOLD))
+            await ctx.send(embed=luxury_embed(title="🔓 Unbanned", description=f"Restored access for {user.name}", color=COLOR_GOLD))
         except:
             await ctx.send("❌ User not found or not banned.")
 
@@ -328,19 +328,19 @@ class Moderation(commands.Cog):
     @require_level(2)
     async def slowmode(self, ctx, seconds: int):
         await ctx.channel.edit(slowmode_delay=seconds)
-        await ctx.send(embed=luxury_embed("⏲️ Slowmode", f"Set to {seconds}s.", COLOR_GOLD))
+        await ctx.send(embed=luxury_embed(title="⏲️ Slowmode", description=f"Set to {seconds}s.", color=COLOR_GOLD))
 
     @commands.command(name="lock")
     @require_level(3)
     async def lock(self, ctx):
         await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=False)
-        await ctx.send(embed=luxury_embed("🔒 Locked", "Channel is now restricted.", COLOR_DANGER))
+        await ctx.send(embed=luxury_embed(title="🔒 Locked", description="Channel is now restricted.", color=COLOR_DANGER))
 
     @commands.command(name="unlock")
     @require_level(3)
     async def unlock(self, ctx):
         await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=None)
-        await ctx.send(embed=luxury_embed("🔓 Unlocked", "Channel is open.", COLOR_GOLD))
+        await ctx.send(embed=luxury_embed(title="🔓 Unlocked", description="Channel is open.", color=COLOR_GOLD))
 
     @commands.command(name="lockdown")
     @require_level(4)
@@ -352,7 +352,7 @@ class Moderation(commands.Cog):
                 await channel.set_permissions(ctx.guild.default_role, send_messages=False)
                 count += 1
             except: continue
-        await ctx.send(embed=luxury_embed("🚨 LOCKDOWN COMPLETE", f"Secured {count} channels.", COLOR_DANGER))
+        await ctx.send(embed=luxury_embed(title="🚨 LOCKDOWN COMPLETE", description=f"Secured {count} channels.", color=COLOR_DANGER))
 
     @commands.command(name="unlockdown")
     @require_level(4)
@@ -364,7 +364,7 @@ class Moderation(commands.Cog):
                 await channel.set_permissions(ctx.guild.default_role, send_messages=None)
                 count += 1
             except: continue
-        await ctx.send(embed=luxury_embed("🔓 UNLOCKDOWN COMPLETE", f"Restored {count} channels.", COLOR_GOLD))
+        await ctx.send(embed=luxury_embed(title="🔓 UNLOCKDOWN COMPLETE", description=f"Restored {count} channels.", color=COLOR_GOLD))
 
     # =====================================================
     # VOICE MODERATION
@@ -379,7 +379,7 @@ class Moderation(commands.Cog):
             if member.top_role < ctx.author.top_role:
                 await member.edit(mute=True)
                 count += 1
-        await ctx.send(embed=luxury_embed("🎙️ Voice Mute", f"Muted {count} users.", COLOR_DANGER))
+        await ctx.send(embed=luxury_embed(title="🎙️ Voice Mute", description=f"Muted {count} users.", color=COLOR_DANGER))
 
     @commands.command(name="vunmuteall")
     @require_level(3)
@@ -389,7 +389,7 @@ class Moderation(commands.Cog):
         for member in ctx.author.voice.channel.members:
             await member.edit(mute=False)
             count += 1
-        await ctx.send(embed=luxury_embed("🎙️ Voice Unmute", f"Unmuted {count} users.", COLOR_GOLD))
+        await ctx.send(embed=luxury_embed(title="🎙️ Voice Unmute", description=f"Unmuted {count} users.", color=COLOR_GOLD))
 
 async def setup(bot: commands.Bot):
     # SAFETY: Remove any existing purge command from other cogs to prevent collisions
