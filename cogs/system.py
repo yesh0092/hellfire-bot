@@ -4,8 +4,14 @@ from discord import ui
 import asyncio
 import time
 import platform
-import psutil
 from datetime import datetime, timedelta
+
+# Safety import for hardware monitoring
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
 
 from utils.embeds import luxury_embed
 from utils.config import COLOR_GOLD, COLOR_SECONDARY, COLOR_DANGER
@@ -33,68 +39,62 @@ class HelpDropdown(ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         selection = self.values[0]
-        
-        # Comprehensive Feature Documentation Mapping
         pages = {
             "admin": {
                 "title": "⚙️ Admin & Setup Commands",
                 "desc": (
-                    f"**{BOT_PREFIX}setup**\nSynchronize server environment and database.\n\n"
-                    f"**{BOT_PREFIX}panic** / **{BOT_PREFIX}unpanic**\nEngage server-wide lockdown protocols.\n\n"
-                    f"**{BOT_PREFIX}automod <on|off>**\nToggle the silent intelligence security layer.\n\n"
-                    f"**{BOT_PREFIX}supportlog**\nConfigure destination for ticket transcripts."
+                    f"**{BOT_PREFIX}setup**\nRun full environment sync.\n\n"
+                    f"**{BOT_PREFIX}panic** / **{BOT_PREFIX}unpanic**\nEngage/Release global lockdown.\n\n"
+                    f"**{BOT_PREFIX}automod <on|off>**\nToggle security intelligence.\n\n"
+                    f"**{BOT_PREFIX}supportlog**\nSet transcript logging channel."
                 )
             },
             "mod": {
-                "title": "🛡️ Ultimate Moderation & Intelligence",
+                "title": "🛡️ Ultimate Moderation Intelligence",
                 "desc": (
-                    f"**{BOT_PREFIX}warn @user <reason>**\nAssign infraction with auto-escalation (8-warn cap).\n\n"
-                    f"**{BOT_PREFIX}warnstats @user**\nView Risk Level, Velocity, and Progress Bars.\n\n"
-                    f"**{BOT_PREFIX}warnhistory @user**\nAudit the 15-incident deep history.\n\n"
-                    f"**{BOT_PREFIX}purge <count>**\nHigh-performance message sanitization."
+                    f"**{BOT_PREFIX}warn @user <reason>**\nFormal warning with auto-escalation.\n\n"
+                    f"**{BOT_PREFIX}warnstats @user**\nView Risk, Velocity, and Progress.\n\n"
+                    f"**{BOT_PREFIX}warnhistory @user**\nDeep audit of user infractions.\n\n"
+                    f"**{BOT_PREFIX}purge <count>**\nAdvanced message sanitization."
                 )
             },
             "support": {
                 "title": "🛎️ Ultimate Support System",
                 "desc": (
-                    "**User-End:** DM the bot to initiate priority tickets.\n\n"
-                    "**Staff Controls:**\n"
-                    "• **Claim:** Take ownership of a ticket.\n"
-                    "• **Close:** Auto-generates a .txt transcript to logs.\n\n"
-                    "**Ghost-Detection:** Inactive tickets auto-archive after 24h."
+                    "**User Support:** DM the bot to open tickets.\n\n"
+                    "**Staff Tools:**\n"
+                    "• **Claim:** Assign yourself to a ticket.\n"
+                    "• **Close:** Generate and log .txt transcripts.\n\n"
+                    "**Auto-Archive:** 24h inactivity trigger enabled."
                 )
             },
             "stats": {
                 "title": "📊 Intelligence & Analytics",
                 "desc": (
-                    f"**{BOT_PREFIX}profile [@user]**\nDeep activity and reputation analysis.\n\n"
-                    f"**{BOT_PREFIX}warnboard**\nLeaderboard of offenders and Staff Enforcer stats.\n\n"
-                    f"**{BOT_PREFIX}staff**\nTrack moderator activity and efficiency levels."
+                    f"**{BOT_PREFIX}profile [@user]**\nFull reputation and activity analysis.\n\n"
+                    f"**{BOT_PREFIX}warnboard**\nLeaderboard of top rule-breakers.\n\n"
+                    f"**{BOT_PREFIX}staff**\nTrack moderator performance metrics."
                 )
             },
             "util": {
                 "title": "🛠️ Utility & Master Roles",
                 "desc": (
-                    f"**{BOT_PREFIX}role @user <Role>**\nSmart toggle role assignment with hierarchy checks.\n\n"
-                    f"**{BOT_PREFIX}whois @user**\nDeep profile intel including Risk Assessment.\n\n"
-                    f"**{BOT_PREFIX}avatar [@user]**\nExtract high-definition profile pictures.\n\n"
-                    f"**{BOT_PREFIX}ping**\nTest Gateway and REST API latency."
+                    f"**{BOT_PREFIX}role @user <Role>**\nSmart toggle with hierarchy safety.\n\n"
+                    f"**{BOT_PREFIX}whois @user**\nDeep profile intel + Risk Assessment.\n\n"
+                    f"**{BOT_PREFIX}avatar [@user]**\nExtract high-definition images.\n\n"
+                    f"**{BOT_PREFIX}ping**\nDetailed REST/Gateway latency test."
                 )
             },
             "voice": {
                 "title": "🎙️ Voice System (24/7)",
-                "desc": (
-                    f"**{BOT_PREFIX}setvc <channel>**\nLock bot into 24/7 voice connectivity.\n\n"
-                    f"**{BOT_PREFIX}unsetvc**\nRelease the voice lock.\n\n"
-                    f"**{BOT_PREFIX}vcstatus**\nDiagnostic health of the voice stream."
-                )
+                "desc": f"**{BOT_PREFIX}setvc** - 24/7 Lock.\n**{BOT_PREFIX}unsetvc** - Release.\n**{BOT_PREFIX}vcstatus** - Diagnostics."
             }
         }
 
         page = pages[selection]
         embed = luxury_embed(
             title=page["title"],
-            description=page["desc"] + "\n\n━━━━━━━━━━━━━━━━━━━━━━\n_Ultimate Platinum Edition • Intelligent Automation_",
+            description=page["desc"] + "\n\n━━━━━━━━━━━━━━━━━━━━━━\n_Ultimate Platinum Edition • Intelligence Automation_",
             color=COLOR_GOLD
         )
         await interaction.response.edit_message(embed=embed)
@@ -105,22 +105,22 @@ class HelpView(ui.View):
         self.add_item(HelpDropdown(bot))
 
 # =====================================================
-# THE SYSTEM COG (ENHANCED & UNTRIMMED)
+# THE SYSTEM COG (ENHANCED PLATINUM)
 # =====================================================
 
 class System(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.start_time = datetime.utcnow()
-        self.process = psutil.Process()
+        if PSUTIL_AVAILABLE:
+            self.process = psutil.Process()
         
-        # Hardened State Initialization
+        # Hardened State
         if not hasattr(state, "SYSTEM_FLAGS"):
             state.SYSTEM_FLAGS = {}
         
         state.SYSTEM_FLAGS.setdefault("panic_mode", False)
         state.SYSTEM_FLAGS.setdefault("automod_enabled", True)
-        state.SYSTEM_FLAGS.setdefault("intelligence_active", True)
         
         self.maintenance_loop.start()
 
@@ -129,158 +129,70 @@ class System(commands.Cog):
 
     @tasks.loop(minutes=30)
     async def maintenance_loop(self):
-        """Internal background thread for cache pruning and health checks"""
-        # Logic for cleaning temporary state data
+        """Internal heartbeat for system health"""
         pass
 
-    # --------------------------------------------------
-    # COMMAND: HELP (MANUAL)
-    # --------------------------------------------------
-
-    @commands.command(name="help", aliases=["manual", "guide"])
+    # ---------------- HELP ----------------
+    @commands.command(name="help", aliases=["manual"])
     @commands.guild_only()
     @require_level(1)
     async def help_command(self, ctx: commands.Context):
-        """The Central Interactive Manual"""
+        """The Interactive Intelligence Manual"""
         embed = luxury_embed(
             title="🌌 HellFire Hangout — PLATINUM MANUAL",
             description=(
-                "**System Version:** `v4.5.2` | **Intelligence:** `God-Mode`\n"
-                "Welcome to the central command hub. Use the menu below to explore.\n\n"
-                "━━━━━━━━━━━━━━━━━━━━━━\n"
-                "📡 **SYSTEM STATUS**\n"
-                "━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"• **AutoMod:** {'`🟢 ACTIVE`' if state.SYSTEM_FLAGS['automod_enabled'] else '`🔴 DISABLED`'}\n"
+                "**Version:** `v4.5.2` | **Core:** `Active`\n\n"
+                f"• **AutoMod:** {'`🟢 ACTIVE`' if state.SYSTEM_FLAGS['automod_enabled'] else '`🔴 OFF`'}\n"
                 f"• **Panic Lock:** {'`🔴 ENGAGED`' if state.SYSTEM_FLAGS['panic_mode'] else '`🟢 CLEAR`'}\n"
                 f"• **Risk Analysis:** `🟢 ONLINE`"
             ),
             color=COLOR_GOLD
         )
-        view = HelpView(self.bot)
-        await ctx.send(embed=embed, view=view)
+        await ctx.send(embed=embed, view=HelpView(self.bot))
 
-    # --------------------------------------------------
-    # COMMAND: MASTER ROLE TOGGLE
-    # --------------------------------------------------
-
+    # ---------------- ROLE TOGGLE ----------------
     @commands.command(name="role")
     @commands.guild_only()
     @require_level(3)
     async def role(self, ctx: commands.Context, member: discord.Member, *, role: discord.Role):
-        """Intelligent role toggle with hierarchy enforcement"""
+        """Master role management with hierarchy check"""
         if role.position >= ctx.author.top_role.position and ctx.author.id != ctx.guild.owner_id:
-            return await ctx.send(embed=luxury_embed("❌ Authority Error", "You cannot manage a role higher than or equal to your own.", COLOR_DANGER))
+            return await ctx.send(embed=luxury_embed("❌ Error", "Authority mismatch. Role too high.", COLOR_DANGER))
         
         if role.managed:
-            return await ctx.send(embed=luxury_embed("❌ System Error", "This role is managed by an integration and cannot be assigned manually.", COLOR_DANGER))
+            return await ctx.send(embed=luxury_embed("❌ Error", "Role is system-managed.", COLOR_DANGER))
 
         if role in member.roles:
-            await member.remove_roles(role, reason=f"Managed by {ctx.author}")
-            await ctx.send(embed=luxury_embed("🔻 Role Removed", f"Removed {role.mention} from {member.mention}.", COLOR_SECONDARY))
+            await member.remove_roles(role)
+            await ctx.send(embed=luxury_embed("🔻 Removed", f"Removed {role.mention} from {member.mention}", COLOR_SECONDARY))
         else:
-            await member.add_roles(role, reason=f"Managed by {ctx.author}")
-            await ctx.send(embed=luxury_embed("🔺 Role Added", f"Assigned {role.mention} to {member.mention}.", COLOR_GOLD))
+            await member.add_roles(role)
+            await ctx.send(embed=luxury_embed("🔺 Added", f"Added {role.mention} to {member.mention}", COLOR_GOLD))
 
-    # --------------------------------------------------
-    # COMMAND: USER INTELLIGENCE (WHOIS)
-    # --------------------------------------------------
-
-    @commands.command(name="whois", aliases=["ui", "userinfo"])
+    # ---------------- WHOIS ----------------
+    @commands.command(name="whois", aliases=["ui"])
     @commands.guild_only()
-    @require_level(1)
     async def whois(self, ctx: commands.Context, member: discord.Member = None):
-        """Deep Analytics & Risk Assessment of a member"""
+        """Deep User Analytics & Risk Assessment"""
         member = member or ctx.author
-        
-        # Pull data from the Warn Intelligence system
-        warn_data = getattr(state, "WARN_DATA", {}).get(member.id, 0)
-        
-        # Dynamic Risk Gauge
-        if warn_data == 0: risk_status = "🟢 Safe (Clean Record)"
-        elif warn_data < 4: risk_status = "🟡 Risky (Behavior Alert)"
-        else: risk_status = "🔴 Dangerous (Terminal/Watchlist)"
+        warns = getattr(state, "WARN_DATA", {}).get(member.id, 0)
+        risk = "🟢 Safe" if warns < 3 else "🟡 Risky" if warns < 6 else "🔴 Dangerous"
 
-        roles = [r.mention for r in reversed(member.roles) if r != ctx.guild.default_role]
-        
         desc = (
             f"👤 **Account:** {member.mention}\n"
             f"🆔 **ID:** `{member.id}`\n\n"
-            f"🧠 **System Risk:** {risk_status}\n"
-            f"🛡️ **Warn Count:** `{warn_data}`\n\n"
+            f"🧠 **System Risk:** {risk}\n"
+            f"🛡️ **Total Warns:** `{warns}`\n\n"
             f"📅 **Created:** <t:{int(member.created_at.timestamp())}:D>\n"
             f"📅 **Joined:** <t:{int(member.joined_at.timestamp())}:R>\n\n"
-            f"🎭 **Top Role:** {member.top_role.mention}\n"
-            f"🌈 **Roles:** {', '.join(roles[:5])}{'...' if len(roles) > 5 else ''}"
+            f"🎭 **Top Role:** {member.top_role.mention}"
         )
-        
-        embed = luxury_embed(f"🕵️ Intelligence: {member.name}", desc, COLOR_GOLD)
+        embed = luxury_embed(f"🕵️ Intel: {member.name}", desc, COLOR_GOLD)
         embed.set_thumbnail(url=member.display_avatar.url)
         await ctx.send(embed=embed)
 
-    # --------------------------------------------------
-    # COMMAND: SERVER DATA ANALYTICS
-    # --------------------------------------------------
-
-    @commands.command(name="serverinfo", aliases=["si"])
-    @commands.guild_only()
-    @require_level(1)
-    async def serverinfo(self, ctx: commands.Context):
-        """Comprehensive server-wide data metrics"""
-        g = ctx.guild
-        humans = len([m for m in g.members if not m.bot])
-        bots = g.member_count - humans
-        
-        desc = (
-            f"👑 **Owner:** {g.owner.mention}\n"
-            f"📅 **Created:** <t:{int(g.created_at.timestamp())}:D>\n\n"
-            f"👥 **Humans:** `{humans}` | 🤖 **Bots:** `{bots}`\n"
-            f"💎 **Level:** `{g.premium_tier}` ({g.premium_subscription_count} Boosts)\n"
-            f"💬 **Channels:** `{len(g.channels)}` | 🎭 **Roles:** `{len(g.roles)}`"
-        )
-        
-        embed = luxury_embed(f" castles {g.name} Metrics", desc, COLOR_GOLD)
-        if g.icon: embed.set_thumbnail(url=g.icon.url)
-        if g.banner: embed.set_image(url=g.banner.url)
-        await ctx.send(embed=embed)
-
-    # --------------------------------------------------
-    # COMMAND: HD MEDIA EXTRACTION
-    # --------------------------------------------------
-
-    @commands.command(name="avatar", aliases=["av", "pfp"])
-    @require_level(1)
-    async def avatar(self, ctx: commands.Context, member: discord.Member = None):
-        """Fetch high-definition user profile pictures"""
-        member = member or ctx.author
-        url = member.display_avatar.with_static_format("png").url
-        
-        embed = luxury_embed(f"🖼️ {member.name}'s Avatar", f"[Direct HD Download Link]({url})", COLOR_GOLD)
-        embed.set_image(url=url)
-        await ctx.send(embed=embed)
-
-    # --------------------------------------------------
-    # COMMAND: SANITIZATION (PURGE)
-    # --------------------------------------------------
-
-    @commands.command(name="purge", aliases=["clear"])
-    @commands.guild_only()
-    @require_level(3)
-    async def purge(self, ctx: commands.Context, amount: int):
-        """Sanitize channel messages with auto-cleanup"""
-        if amount > 100: amount = 100
-        
-        await ctx.message.delete()
-        deleted = await ctx.channel.purge(limit=amount)
-        
-        msg = await ctx.send(f"🧹 **Sanitization Complete:** `{len(deleted)}` messages removed from history.")
-        await asyncio.sleep(4)
-        await msg.delete()
-
-    # --------------------------------------------------
-    # COMMAND: DIAGNOSTICS & STATUS
-    # --------------------------------------------------
-
-    @commands.command(name="status", aliases=["stats", "health"])
+    # ---------------- STATUS ----------------
+    @commands.command(name="status", aliases=["health"])
     @require_level(1)
     async def status(self, ctx: commands.Context):
         """High-Fidelity System Diagnostics"""
@@ -288,60 +200,76 @@ class System(commands.Cog):
         h, r = divmod(int(uptime.total_seconds()), 3600)
         m, s = divmod(r, 60)
         
-        # Hardware Metrics
-        cpu_usage = psutil.cpu_percent()
-        ram_usage = self.process.memory_info().rss / 1024 / 1024 # MB
+        # Safe Hardware Check
+        if PSUTIL_AVAILABLE:
+            cpu = f"{psutil.cpu_percent()}%"
+            ram = f"{round(self.process.memory_info().rss / 1024 / 1024, 2)} MB"
+        else:
+            cpu = "N/A (Missing psutil)"
+            ram = "N/A (Missing psutil)"
 
         embed = luxury_embed(
-            title="📊 Universal Intelligence Diagnostics",
+            title="📊 Diagnostics",
             description=(
                 f"⏱ **Uptime:** `{h}h {m}m {s}s`\n"
-                f"🛰 **Gateway Latency:** `{round(self.bot.latency * 1000)}ms`\n\n"
-                f"🧠 **RAM Consumption:** `{ram_usage:.2f} MB`\n"
-                f"⚡ **CPU Load:** `{cpu_usage}%`\n\n"
-                f"🛡 **AutoMod:** `{'🟢 ONLINE' if state.SYSTEM_FLAGS['automod_enabled'] else '🔴 OFFLINE'}`\n"
-                f"🚨 **Panic Protocol:** `{'🔴 ACTIVE' if state.SYSTEM_FLAGS['panic_mode'] else '🟢 STANDBY'}`"
+                f"🛰 **Latency:** `{round(self.bot.latency * 1000)}ms`\n\n"
+                f"🧠 **RAM:** `{ram}`\n"
+                f"⚡ **CPU:** `{cpu}`\n\n"
+                f"🛡 **AutoMod:** `{'ON' if state.SYSTEM_FLAGS['automod_enabled'] else 'OFF'}`\n"
+                f"🚨 **Panic:** `{'ACTIVE' if state.SYSTEM_FLAGS['panic_mode'] else 'STANDBY'}`"
             ),
             color=COLOR_SECONDARY
         )
         await ctx.send(embed=embed)
 
-    # --------------------------------------------------
-    # COMMAND: LATENCY TEST
-    # --------------------------------------------------
+    # ---------------- AVATAR ----------------
+    @commands.command(name="avatar", aliases=["av"])
+    async def avatar(self, ctx: commands.Context, member: discord.Member = None):
+        """Fetch HD profile picture"""
+        member = member or ctx.author
+        url = member.display_avatar.url
+        embed = luxury_embed(f"🖼️ {member.name}", f"[HD Link]({url})", COLOR_GOLD)
+        embed.set_image(url=url)
+        await ctx.send(embed=embed)
 
+    # ---------------- PURGE ----------------
+    @commands.command(name="purge")
+    @commands.guild_only()
+    @require_level(3)
+    async def purge(self, ctx: commands.Context, amount: int):
+        """Sanitize channel history"""
+        if amount > 100: amount = 100
+        await ctx.message.delete()
+        deleted = await ctx.channel.purge(limit=amount)
+        msg = await ctx.send(f"🧹 Removed **{len(deleted)}** messages.")
+        await asyncio.sleep(4)
+        await msg.delete()
+
+    # ---------------- PING ----------------
     @commands.command(name="ping")
-    @require_level(1)
     async def ping(self, ctx: commands.Context):
-        """Test API and Gateway latency cycles"""
+        """Latency benchmark"""
         start = time.perf_counter()
-        message = await ctx.send(embed=luxury_embed("🛰️ Testing Latency...", "Measuring Gateway and REST cycles.", COLOR_SECONDARY))
+        message = await ctx.send("🛰️ Measuring...")
         end = time.perf_counter()
-        
-        rest_lat = round((end - start) * 1000)
-        ws_lat = round(self.bot.latency * 1000)
-        
-        await message.edit(embed=luxury_embed("🛰️ Connectivity Intel", f"**REST API Cycle:** `{rest_lat}ms`\n**Gateway Heartbeat:** `{ws_lat}ms`", COLOR_GOLD))
+        await message.edit(content=None, embed=luxury_embed("🛰️ Latency", 
+            f"**REST:** `{round((end-start)*1000)}ms`\n**WS:** `{round(self.bot.latency*1000)}ms`", COLOR_GOLD))
 
-    # --------------------------------------------------
-    # COMMAND: PANIC PROTOCOLS
-    # --------------------------------------------------
-
-    @commands.command(name="panic")
+    # ---------------- PANIC ----------------
+    @commands.command()
     @require_level(4)
     async def panic(self, ctx: commands.Context):
-        """Activate server-wide emergency lockdown"""
         state.SYSTEM_FLAGS["panic_mode"] = True
-        await ctx.send(embed=luxury_embed("🚨 PROTOCOL: PANIC ENGAGED", "The system is now in lockdown mode. Permissions are restricted.", COLOR_DANGER))
+        await ctx.send(embed=luxury_embed("🚨 PANIC", "Lockdown engaged.", COLOR_DANGER))
 
-    @commands.command(name="unpanic")
+    @commands.command()
     @require_level(4)
     async def unpanic(self, ctx: commands.Context):
-        """Release emergency lockdown"""
         state.SYSTEM_FLAGS["panic_mode"] = False
-        await ctx.send(embed=luxury_embed("✅ PROTOCOL: CLEAR", "Panic mode deactivated. Resuming standard operational flow.", COLOR_GOLD))
+        await ctx.send(embed=luxury_embed("✅ CLEAR", "Lockdown lifted.", COLOR_GOLD))
 
 async def setup(bot: commands.Bot):
-    # Ensure default help is removed to prevent naming conflicts
-    bot.remove_command('help')
+    # This prevents the "default help" crash
+    if bot.get_command('help'):
+        bot.remove_command('help')
     await bot.add_cog(System(bot))
