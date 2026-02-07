@@ -59,6 +59,7 @@ class HelpDropdown(ui.Select):
                     f"**{BOT_PREFIX}warn @user <reason>** - Assign infraction.\n"
                     f"**{BOT_PREFIX}warnstats @user** - Risk & Progress Analysis.\n"
                     f"**{BOT_PREFIX}warnhistory @user** - Deep audit trail.\n"
+                    f"**{BOT_PREFIX}clearwarns @user** - Remove all Warns.\n"
                     f"**{BOT_PREFIX}purge <count>** - Mass clean channel."
                 ), "color": COLOR_DANGER
             },
