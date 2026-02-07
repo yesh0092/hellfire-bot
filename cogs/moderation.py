@@ -41,6 +41,7 @@ class Moderation(commands.Cog):
         if not hasattr(state, "WARN_DATA"): state.WARN_DATA = {}
         if not hasattr(state, "WARN_LOGS"): state.WARN_LOGS = {}
         if not hasattr(state, "LOCKDOWN_DATA"): state.LOCKDOWN_DATA = set()
+        if not hasattr(state, "STAFF_STATS"): state.STAFF_STATS = {}
 
     # =====================================================
     # INTERNAL HELPERS
@@ -180,11 +181,19 @@ class Moderation(commands.Cog):
         state.WARN_DATA[uid] = state.WARN_DATA.get(uid, 0) + 1
         warns = state.WARN_DATA[uid]
 
+        # Detailed Logging
         state.WARN_LOGS.setdefault(uid, []).append({
             "reason": reason,
             "by": ctx.author.id,
             "time": datetime.utcnow().timestamp()
         })
+
+        # Track Staff Stats
+        sid = ctx.author.id
+        if sid not in state.STAFF_STATS:
+            state.STAFF_STATS[sid] = {"actions": 0, "warns": 0}
+        state.STAFF_STATS[sid]["warns"] += 1
+        state.STAFF_STATS[sid]["actions"] += 1
 
         await self._safe_dm(
             member,
@@ -211,10 +220,10 @@ class Moderation(commands.Cog):
         elif warns >= WARN_KICK_THRESHOLD:
             await self._apply_kick(ctx, member, f"Auto-Escalation ({warns} Warnings)")
 
-    @commands.command(name="warns", aliases=["warnings"])
+    @commands.command(name="warns", aliases=["warnings", "warnhistory"])
     @require_level(1)
     async def warnings(self, ctx, member: discord.Member):
-        """Views warning history for a user"""
+        """Views detailed warning history for a user"""
         uid = member.id
         count = state.WARN_DATA.get(uid, 0)
         logs = state.WARN_LOGS.get(uid, [])
@@ -223,13 +232,38 @@ class Moderation(commands.Cog):
             return await ctx.send(embed=luxury_embed(title="✅ Clean History", description=f"{member.mention} has no warnings.", color=COLOR_GOLD))
 
         desc = ""
+        # Showing last 10 warnings to keep embed clean
         for i, log in enumerate(logs[-10:], 1): 
             mod = ctx.guild.get_member(log['by'])
-            mod_name = mod.name if mod else "Unknown Mod"
-            date = datetime.fromtimestamp(log['time']).strftime('%Y-%m-%d')
+            mod_name = mod.mention if mod else f"Unknown Staff (`{log['by']}`)"
+            date = datetime.fromtimestamp(log['time']).strftime('%Y-%m-%d %H:%M')
             desc += f"**{i}.** `{date}` - {log['reason']} (By: {mod_name})\n"
 
-        embed = luxury_embed(title=f"⚠️ Warning History: {member.name}", description=f"Total Warnings: **{count}**\n\n{desc}", color=COLOR_GOLD)
+        embed = luxury_embed(
+            title=f"📋 Warning History — {member.name}", 
+            description=f"**Total Infractions:** {count}\n\n{desc}", 
+            color=COLOR_GOLD
+        )
+        embed.set_footer(text=f"User ID: {member.id}")
+        await ctx.send(embed=embed)
+
+    @commands.command(name="warnstats")
+    @require_level(2)
+    async def warnstats(self, ctx, staff: discord.Member = None):
+        """Views moderation statistics for a staff member"""
+        target = staff or ctx.author
+        stats = state.STAFF_STATS.get(target.id, {"actions": 0, "warns": 0})
+
+        embed = luxury_embed(
+            title=f"📊 Staff Performance — {target.name}",
+            description=(
+                f"**Warnings Issued:** {stats['warns']}\n"
+                f"**Total Mod Actions:** {stats['actions']}\n"
+                f"*Note: Stats reset on bot restart.*"
+            ),
+            color=COLOR_GOLD
+        )
+        embed.set_thumbnail(url=target.display_avatar.url)
         await ctx.send(embed=embed)
 
     @commands.command(name="clearwarns")
@@ -267,6 +301,13 @@ class Moderation(commands.Cog):
 
         await self._safe_dm(member, luxury_embed(title="⏳ Timeout Applied", description=f"⏱ **Duration:** {minutes}m\n📄 **Reason:** {reason}", color=COLOR_SECONDARY))
         await member.timeout(timedelta(minutes=minutes), reason=reason)
+        
+        # Log to Staff Stats if triggered by a command
+        if ctx:
+            sid = ctx.author.id
+            if sid not in state.STAFF_STATS: state.STAFF_STATS[sid] = {"actions": 0, "warns": 0}
+            state.STAFF_STATS[sid]["actions"] += 1
+
         if ctx and not silent:
             await ctx.send(embed=luxury_embed(title="⏳ Timeout Executed", description=f"{member.mention} silenced for **{minutes}m**.", color=COLOR_GOLD))
         await self._log(target_guild, "⏳ Timeout", f"User: {member.mention}\nDuration: {minutes}m\nReason: {reason}")
@@ -288,7 +329,12 @@ class Moderation(commands.Cog):
         if not bot.guild_permissions.kick_members: return
         await self._safe_dm(member, luxury_embed(title="🚫 Kicked", description=f"📄 **Reason:** {reason}", color=COLOR_DANGER))
         await member.kick(reason=reason)
+        
         if ctx:
+            sid = ctx.author.id
+            if sid not in state.STAFF_STATS: state.STAFF_STATS[sid] = {"actions": 0, "warns": 0}
+            state.STAFF_STATS[sid]["actions"] += 1
+            
             await ctx.send(embed=luxury_embed(title="👢 Kicked", description=f"{member.mention} removed.", color=COLOR_GOLD))
             await self._log(ctx, "👢 Kick", f"User: {member}\nReason: {reason}")
 
@@ -299,6 +345,11 @@ class Moderation(commands.Cog):
         if self._invalid_target(ctx, member): return
         await self._safe_dm(member, luxury_embed(title="⛔ Banned", description=f"📄 **Reason:** {reason}", color=COLOR_DANGER))
         await member.ban(reason=reason)
+        
+        sid = ctx.author.id
+        if sid not in state.STAFF_STATS: state.STAFF_STATS[sid] = {"actions": 0, "warns": 0}
+        state.STAFF_STATS[sid]["actions"] += 1
+        
         await ctx.send(embed=luxury_embed(title="⛔ Banned", description=f"{member.mention} blacklisted.", color=COLOR_GOLD))
         await self._log(ctx, "⛔ Ban", f"User: {member}\nReason: {reason}")
 
@@ -392,10 +443,9 @@ class Moderation(commands.Cog):
         await ctx.send(embed=luxury_embed(title="🎙️ Voice Unmute", description=f"Unmuted {count} users.", color=COLOR_GOLD))
 
 async def setup(bot: commands.Bot):
-    # SAFETY: Remove any existing purge command from other cogs to prevent collisions
-    if bot.get_command("purge"):
-        bot.remove_command("purge")
-    if bot.get_command("clear"):
-        bot.remove_command("clear")
-        
+    # SAFETY: Remove collisions
+    for cmd in ["purge", "clear", "warns", "warnings", "warnhistory", "warnstats"]:
+        if bot.get_command(cmd):
+            bot.remove_command(cmd)
+            
     await bot.add_cog(Moderation(bot))
