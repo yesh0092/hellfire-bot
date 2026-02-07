@@ -1,226 +1,203 @@
 import discord
-from discord.ext import commands
-from datetime import datetime
+from discord.ext import commands, tasks
+from datetime import datetime, timedelta
 
 from utils.embeds import luxury_embed
 from utils.config import COLOR_GOLD, COLOR_SECONDARY, COLOR_DANGER
 from utils import state
 
-
 # =====================================================
 # WARN SYSTEM — READ ONLY (GOD MODE)
 # =====================================================
-# • No punishments here
-# • No conflicts with moderation.py
-# • Pure intelligence & visibility layer
-# =====================================================
-
 
 class WarnSystem(commands.Cog):
     """
     GOD-MODE WARNING INTELLIGENCE SYSTEM
-
-    • Read-only (safe)
-    • Shows history, trends, risk level
-    • Anime-style presentation
-    • Works with moderation.py escalation
+    
+    • Advanced Analytics & Risk Assessment
+    • Non-Invasive (Read-Only)
+    • Staff Enforcer Tracking
     """
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-        # =================================================
-        # HARDEN SHARED STATE (CRITICAL)
-        # =================================================
-        if not hasattr(state, "WARN_DATA"):
-            state.WARN_DATA = {}
+        # Harden Shared State
+        state.WARN_DATA = getattr(state, "WARN_DATA", {})
+        state.WARN_LOGS = getattr(state, "WARN_LOGS", {})
+        state.STAFF_ROLE_TIERS = getattr(state, "STAFF_ROLE_TIERS", {})
+        
+        self.prune_stale_data.start()
 
-        if not hasattr(state, "WARN_LOGS"):
-            state.WARN_LOGS = {}
-
-        if not hasattr(state, "STAFF_ROLE_TIERS"):
-            state.STAFF_ROLE_TIERS = {}
+    def cog_unload(self):
+        self.prune_stale_data.cancel()
 
     # =====================================================
-    # INTERNAL STAFF CHECK
+    # INTERNAL UTILS
     # =====================================================
 
     def is_staff(self, member: discord.Member) -> bool:
+        if member.guild_permissions.administrator:
+            return True
         for role_id in state.STAFF_ROLE_TIERS.values():
             if role_id and any(r.id == role_id for r in member.roles):
                 return True
         return False
 
+    def get_progress_bar(self, count: int, max_val: int = 8) -> str:
+        """Generates a visual bar for warning progression"""
+        filled = min(count, max_val)
+        empty = max_val - filled
+        return f"{'🟥' * filled}{'⬜' * empty}"
+
     # =====================================================
-    # WARN STATS (SUMMARY)
+    # INTELLIGENCE COMMANDS
     # =====================================================
 
-    @commands.command()
+    @commands.command(aliases=["ws", "intel"])
     @commands.guild_only()
     async def warnstats(self, ctx: commands.Context, member: discord.Member):
+        """Advanced Warning Intelligence Report"""
         if not self.is_staff(ctx.author):
-            return await ctx.send(
-                embed=luxury_embed(
-                    title="❌ Access Denied",
-                    description="Only staff may view warning intelligence.",
-                    color=COLOR_DANGER
-                )
-            )
+            return await ctx.send(embed=luxury_embed("❌ Denied", "Staff only.", COLOR_DANGER))
 
         warns = state.WARN_DATA.get(member.id, 0)
         logs = state.WARN_LOGS.get(member.id, [])
 
         if not logs:
-            return await ctx.send(
-                embed=luxury_embed(
-                    title="📊 Warning Status",
-                    description=f"{member.mention} has **no warnings** on record.",
-                    color=COLOR_SECONDARY
-                )
-            )
+            return await ctx.send(embed=luxury_embed("📊 Intel", f"{member.mention} is clean.", COLOR_SECONDARY))
 
-        # ---------------- RISK LEVEL ----------------
-        if warns >= 5:
-            risk = "🔴 CRITICAL"
-        elif warns >= 3:
-            risk = "🟠 HIGH"
-        elif warns >= 1:
-            risk = "🟡 LOW"
-        else:
-            risk = "🟢 CLEAN"
+        # --- RISK ANALYSIS ---
+        risk_level = "🟢 CLEAN"
+        if warns >= 8: risk_level = "💀 TERMINAL (7D TIMEOUT REACHED)"
+        elif warns >= 6: risk_level = "🔴 CRITICAL (24H AT RISK)"
+        elif warns >= 4: risk_level = "🟠 HIGH (6H AT RISK)"
+        elif warns >= 1: risk_level = "🟡 ELEVATED"
 
-        # ---------------- LAST WARNING ----------------
+        # Frequency Calculation (Warnings per week)
+        first_warn = datetime.fromtimestamp(logs[0]["time"])
+        days_since = (datetime.utcnow() - first_warn).days or 1
+        frequency = round((warns / days_since) * 7, 2)
+
         last = logs[-1]
-        last_time = last["time"].strftime("%Y-%m-%d %H:%M UTC")
+        progress = self.get_progress_bar(warns)
 
         embed = luxury_embed(
-            title="📊 Warning Intelligence Report",
+            title="🧠 Intelligence Report",
             description=(
-                f"👤 **User:** {member.mention}\n"
-                f"⚠️ **Total Warnings:** {warns}\n"
-                f"🧠 **Risk Level:** {risk}\n\n"
-                f"🕒 **Last Warning:** {last_time}\n"
-                f"👮 **Issued By:** <@{last['by']}>\n"
-                f"📄 **Reason:** {last['reason']}"
+                f"👤 **Target:** {member.mention}\n"
+                f"📊 **Risk Status:** {risk_level}\n"
+                f"📈 **Velocity:** `{frequency}` warns/week\n\n"
+                f"**Punishment Progress:**\n`{progress}` ({warns}/8)\n\n"
+                f"🕒 **Recent Activity:** <t:{int(last['time'])}:R>\n"
+                f"👮 **Assigned Mod:** <@{last['by']}>\n"
+                f"📄 **Last Reason:** {last['reason']}"
+            ),
+            color=COLOR_GOLD if warns < 6 else COLOR_DANGER
+        )
+        embed.set_thumbnail(url=member.display_avatar.url)
+        await ctx.send(embed=embed)
+
+    @commands.command(aliases=["wh", "logs"])
+    @commands.guild_only()
+    async def warnhistory(self, ctx: commands.Context, member: discord.Member):
+        """Full audit trail of user violations"""
+        if not self.is_staff(ctx.author): return
+        
+        logs = state.WARN_LOGS.get(member.id, [])
+        if not logs:
+            return await ctx.send(embed=luxury_embed("📜 Audit", "No records found.", COLOR_SECONDARY))
+
+        # Show last 15 instead of 10
+        history = []
+        for i, entry in enumerate(reversed(logs[-15:]), start=1):
+            history.append(
+                f"**#{len(logs)-i+1}** | <t:{int(entry['time'])}:d>\n"
+                f"└ `Reason:` {entry['reason']}\n"
+                f"└ `Staff:` <@{entry['by']}>"
+            )
+
+        embed = luxury_embed(
+            title=f"📜 Incident History: {member.name}",
+            description="\n".join(history),
+            color=COLOR_GOLD
+        )
+        await ctx.send(embed=embed)
+
+    @commands.command(aliases=["wb", "topwarns"])
+    @commands.guild_only()
+    async def warnboard(self, ctx: commands.Context):
+        """Top offenders and staff metrics"""
+        if not self.is_staff(ctx.author): return
+
+        if not state.WARN_DATA:
+            return await ctx.send("📊 No warning data found.")
+
+        # User Leaderboard
+        ranked_users = sorted(state.WARN_DATA.items(), key=lambda x: x[1], reverse=True)[:5]
+        user_list = []
+        for uid, count in ranked_users:
+            user_list.append(f"`{count}x` <@{uid}>")
+
+        # Staff Metrics (Who is issuing the most?)
+        staff_counts = {}
+        for user_logs in state.WARN_LOGS.values():
+            for entry in user_logs:
+                staff_id = entry['by']
+                staff_counts[staff_id] = staff_counts.get(staff_id, 0) + 1
+        
+        ranked_staff = sorted(staff_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+        staff_list = [f"`{count}x` <@{sid}>" for sid, count in ranked_staff]
+
+        embed = luxury_embed(
+            title="🚨 Security Intelligence Dashboard",
+            description=(
+                "**🔥 Top Offenders**\n" + ("\n".join(user_list) or "None") + 
+                "\n\n**👮 Most Active Enforcers**\n" + ("\n".join(staff_list) or "None")
             ),
             color=COLOR_GOLD
         )
-
-        embed.set_thumbnail(url=member.display_avatar.url)
-
         await ctx.send(embed=embed)
-
-    # =====================================================
-    # FULL WARNING HISTORY (DETAILED)
-    # =====================================================
-
-    @commands.command()
-    @commands.guild_only()
-    async def warnhistory(self, ctx: commands.Context, member: discord.Member):
-        if not self.is_staff(ctx.author):
-            return await ctx.send(
-                embed=luxury_embed(
-                    title="❌ Access Denied",
-                    description="Only staff may view warning history.",
-                    color=COLOR_DANGER
-                )
-            )
-
-        logs = state.WARN_LOGS.get(member.id, [])
-
-        if not logs:
-            return await ctx.send(
-                embed=luxury_embed(
-                    title="📜 Warning History",
-                    description="No warnings recorded for this user.",
-                    color=COLOR_SECONDARY
-                )
-            )
-
-        lines = []
-        for i, entry in enumerate(logs[-10:], start=1):
-            lines.append(
-                f"**{i}.** {entry['reason']}\n"
-                f"• By: <@{entry['by']}>\n"
-                f"• Date: {entry['time'].strftime('%Y-%m-%d')}"
-            )
-
-        embed = luxury_embed(
-            title=f"📜 Warning History — {member}",
-            description="\n\n".join(lines),
-            color=COLOR_GOLD
-        )
-
-        embed.set_thumbnail(url=member.display_avatar.url)
-
-        await ctx.send(embed=embed)
-
-    # =====================================================
-    # SERVER WARNING LEADERBOARD (INTEL)
-    # =====================================================
-
-    @commands.command()
-    @commands.guild_only()
-    async def warnboard(self, ctx: commands.Context):
-        if not self.is_staff(ctx.author):
-            return
-
-        if not state.WARN_DATA:
-            return await ctx.send(
-                embed=luxury_embed(
-                    title="📊 Warning Leaderboard",
-                    description="No warnings recorded yet.",
-                    color=COLOR_SECONDARY
-                )
-            )
-
-        # Sort by warning count
-        ranked = sorted(
-            state.WARN_DATA.items(),
-            key=lambda x: x[1],
-            reverse=True
-        )[:10]
-
-        lines = []
-        for user_id, count in ranked:
-            user = ctx.guild.get_member(user_id)
-            if not user:
-                continue
-            lines.append(f"• {user.mention} — **{count} warnings**")
-
-        await ctx.send(
-            embed=luxury_embed(
-                title="🚨 Server Warning Leaderboard",
-                description="\n".join(lines),
-                color=COLOR_GOLD
-            )
-        )
-
-    # =====================================================
-    # SELF CHECK (USER SAFE)
-    # =====================================================
 
     @commands.command()
     @commands.guild_only()
     async def mywarns(self, ctx: commands.Context):
+        """Private check for users"""
         warns = state.WARN_DATA.get(ctx.author.id, 0)
+        
+        status = "Good Standing"
+        if warns >= 6: status = "Near Permanent Ban"
+        elif warns >= 3: status = "Strict Monitoring"
 
-        logs = state.WARN_LOGS.get(ctx.author.id, [])
-        last = logs[-1]["time"].strftime("%Y-%m-%d") if logs else "N/A"
-
-        await ctx.send(
-            embed=luxury_embed(
-                title="📊 Your Warning Status",
-                description=(
-                    f"⚠️ **Total Warnings:** {warns}\n"
-                    f"🕒 **Last Warning:** {last}\n\n"
-                    "If you believe a warning was incorrect, "
-                    "please contact staff respectfully."
-                ),
-                color=COLOR_SECONDARY
-            )
+        embed = luxury_embed(
+            title="🛡️ Your Security Status",
+            description=(
+                f"⚠️ **Total Violations:** {warns}\n"
+                f"🛡️ **Account Health:** {status}\n\n"
+                "*Please follow the server rules to avoid further automated escalations.*"
+            ),
+            color=COLOR_SECONDARY if warns < 3 else COLOR_DANGER
         )
+        await ctx.send(embed=embed)
 
+    # =====================================================
+    # BACKGROUND MAINTENANCE
+    # =====================================================
+
+    @tasks.loop(hours=24)
+    async def prune_stale_data(self):
+        """Deletes warning data for users no longer in the server (Efficiency)"""
+        await self.bot.wait_until_ready()
+        guild = self.bot.get_guild(state.MAIN_GUILD_ID)
+        if not guild: return
+
+        active_uids = [m.id for m in guild.members]
+        
+        # Prune state.WARN_DATA
+        for uid in list(state.WARN_DATA.keys()):
+            if uid not in active_uids:
+                state.WARN_DATA.pop(uid, None)
+                state.WARN_LOGS.pop(uid, None)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(WarnSystem(bot))
