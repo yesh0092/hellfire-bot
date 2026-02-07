@@ -15,7 +15,7 @@ from utils import state
 # =====================================================
 
 WARN_TIMEOUT_THRESHOLD = 3
-WARN_KICK_THRESHOLD = 5
+WARN_KICK_THRESHOLD = 9 # Increased to accommodate the 8-warn milestone
 
 TIMEOUT_DURATION_MIN = 1440        # 24h escalation
 SPAM_TIMEOUT_MIN = 5               # spam timeout
@@ -208,10 +208,17 @@ class Moderation(commands.Cog):
         await self._handle_escalation(ctx, member, warns)
 
     async def _handle_escalation(self, ctx, member, warns: int):
-        if warns == WARN_TIMEOUT_THRESHOLD:
-            await self._apply_timeout(ctx, member, TIMEOUT_DURATION_MIN, "Auto-Escalation (3 Warnings)")
+        """Applies automated punishments based on warn count"""
+        if warns == 3:
+            await self._apply_timeout(ctx, member, 240, "Auto-Escalation (3 Warnings: 4h Timeout)")
+        elif warns == 4:
+            await self._apply_timeout(ctx, member, 360, "Auto-Escalation (4 Warnings: 6h Timeout)")
+        elif warns == 6:
+            await self._apply_timeout(ctx, member, 1440, "Auto-Escalation (6 Warnings: 24h Timeout)")
+        elif warns == 8:
+            await self._apply_timeout(ctx, member, 10080, "Auto-Escalation (8 Warnings: 7d Timeout)")
         elif warns >= WARN_KICK_THRESHOLD:
-            await self._apply_kick(ctx, member, "Auto-Escalation (5 Warnings)")
+            await self._apply_kick(ctx, member, f"Auto-Escalation ({warns} Warnings)")
 
     @commands.command(name="warns", aliases=["warnings"])
     @require_level(1)
