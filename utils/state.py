@@ -2,39 +2,23 @@
 # 🔥 HellFire Hangout — Global Runtime State
 # =================================================
 
-# ⚠️ CRITICAL RULES:
-# • In-memory only (resets on restart)
-# • Safe for Railway / Replit / free hosting
-# • NO logic | NO async | NO functions
-# • ONLY variables & documentation
-# =================================================
-
 from typing import Dict, List, Set, Optional, Any
 from datetime import datetime
 
-
 # =================================================
-# 🧾 MODERATION — WARN & LOCKDOWN
+# ⚙️ GUILD CONFIGURATION (RUNTIME)
 # =================================================
 
-# user_id -> total warning count
-WARN_DATA: Dict[int, int] = {}
+# Primary guild ID (CRITICAL: Replace with your actual Server ID)
+MAIN_GUILD_ID: int = 123456789012345678
 
-# user_id -> list of warning records
-WARN_LOGS: Dict[int, List[dict]] = {}
-"""
-WARN_LOGS[user_id] = [
-    {
-        "reason": str,
-        "by": staff_id,
-        "time": float (timestamp)
-    }
-]
-"""
+# Channel IDs
+WELCOME_CHANNEL_ID: Optional[int] = None
+SUPPORT_LOG_CHANNEL_ID: Optional[int] = None
+BOT_LOG_CHANNEL_ID: Optional[int] = None
 
-# set of channel_ids currently under lockdown
-LOCKDOWN_DATA: Set[int] = set()
-
+# Role IDs
+AUTO_ROLE_ID: Optional[int] = None
 
 # =================================================
 # 🛎️ SUPPORT — TICKET SYSTEM
@@ -48,91 +32,19 @@ TICKET_BANNED_USERS: Set[int] = set()
 
 # channel_id -> ticket metadata
 TICKET_META: Dict[int, dict] = {}
-"""
-TICKET_META[channel_id] = {
-    "owner": user_id,
-    "created_at": datetime,
-    "last_activity": datetime,
-    "status": "waiting_staff" | "staff_engaged" | "waiting_user" | "escalated",
-    "priority": "normal" | "high",
-    "panel_id": message_id
-}
-"""
 
 # DM support session tracking (anti-spam)
 DM_SUPPORT_SESSIONS: Dict[int, dict] = {}
 
-
-# =================================================
-# 🧠 STAFF — INTELLIGENCE & SAFETY
-# =================================================
-
-# staff_id -> moderation activity stats
-STAFF_STATS: Dict[int, dict] = {}
-
-# user_id -> private internal staff notes
-STAFF_NOTES: Dict[int, List[dict]] = {}
-
-
-# =================================================
-# 🛡️ AUTOMOD / SECURITY — RUNTIME MEMORY
-# =================================================
-
-# user_id -> list of recent message timestamps (float) for spam detection
-MESSAGE_HISTORY: Dict[int, List[float]] = {}
-
-# channel_id -> { "author_id": int, "content": str, "timestamp": datetime }
-GHOST_PING_HISTORY: Dict[int, dict] = {}
-
-# user_id -> last automod action timestamp
-AUTOMOD_LAST_ACTION: Dict[int, float] = {}
-
-# user_id -> automod strike count
-AUTOMOD_STRIKES: Dict[int, int] = {}
-
-
-# =================================================
-# 🏆 ACTIVITY — WEEKLY MVP SYSTEM
-# =================================================
-
-# guild_id -> current MVP user_id
-CURRENT_TEXT_MVP: Dict[int, Optional[int]] = {}
-
-# guild_id -> last MVP rotation timestamp
-LAST_MVP_ROTATION: Dict[int, datetime] = {}
-
-
-# =================================================
-# 📊 ACTIVITY — MESSAGE TRACKING
-# =================================================
-
-# user_id -> message count since last restart
-RUNTIME_MESSAGE_COUNT: Dict[int, int] = {}
-
-
-# =================================================
-# 🌌 ONBOARDING — JOIN FLOW
-# =================================================
-
-# user_id -> onboarding message_id
-ONBOARDING_MESSAGES: Dict[int, int] = {}
-
-
-# =================================================
-# ⚙️ GUILD CONFIGURATION (RUNTIME)
-# =================================================
-
-# Primary guild ID
-MAIN_GUILD_ID: Optional[int] = None
-
-# Channel IDs
-WELCOME_CHANNEL_ID: Optional[int] = None
-SUPPORT_LOG_CHANNEL_ID: Optional[int] = None
-BOT_LOG_CHANNEL_ID: Optional[int] = None
-
-# Role IDs
-AUTO_ROLE_ID: Optional[int] = None
-
+# Role mapping for Ticket Categorization
+# Replace None with the actual Role IDs from your server
+TICKET_ROLES: Dict[str, Optional[int]] = {
+    "Report": None,   # ID for Report Staff
+    "Support": None,  # ID for General Support
+    "Help": None,     # ID for Help Staff
+    "Reward": None,   # ID for Reward/Giveaway Staff
+    "Others": None    # ID for Admin/Other Staff
+}
 
 # =================================================
 # 👮 STAFF ROLE SYSTEM (HIERARCHY)
@@ -146,11 +58,46 @@ STAFF_ROLE_TIERS: Dict[int, Optional[int]] = {
     4: None,  # Staff+++
 }
 
+# =================================================
+# 🧾 MODERATION — WARN & LOCKDOWN
+# =================================================
+WARN_DATA: Dict[int, int] = {}
+WARN_LOGS: Dict[int, List[dict]] = {}
+LOCKDOWN_DATA: Set[int] = set()
+
+# =================================================
+# 🧠 STAFF — INTELLIGENCE & SAFETY
+# =================================================
+STAFF_STATS: Dict[int, dict] = {}
+STAFF_NOTES: Dict[int, List[dict]] = {}
+
+# =================================================
+# 🛡️ AUTOMOD / SECURITY — RUNTIME MEMORY
+# =================================================
+MESSAGE_HISTORY: Dict[int, List[float]] = {}
+GHOST_PING_HISTORY: Dict[int, dict] = {}
+AUTOMOD_LAST_ACTION: Dict[int, float] = {}
+AUTOMOD_STRIKES: Dict[int, int] = {}
+
+# =================================================
+# 🏆 ACTIVITY — WEEKLY MVP SYSTEM
+# =================================================
+CURRENT_TEXT_MVP: Dict[int, Optional[int]] = {}
+LAST_MVP_ROTATION: Dict[int, datetime] = {}
+
+# =================================================
+# 📊 ACTIVITY — MESSAGE TRACKING
+# =================================================
+RUNTIME_MESSAGE_COUNT: Dict[int, int] = {}
+
+# =================================================
+# 🌌 ONBOARDING — JOIN FLOW
+# =================================================
+ONBOARDING_MESSAGES: Dict[int, int] = {}
 
 # =================================================
 # 🚨 SYSTEM FLAGS (GLOBAL TOGGLES)
 # =================================================
-
 SYSTEM_FLAGS: Dict[str, bool] = {
     "panic_mode": False,
     "automod_enabled": True,
@@ -160,21 +107,13 @@ SYSTEM_FLAGS: Dict[str, bool] = {
     "maintenance_mode": False
 }
 
-
 # =================================================
 # 🔊 VOICE SYSTEM
 # =================================================
-
-# Voice channel ID to stay connected
 VOICE_CHANNEL_ID: Optional[int] = None
-
-# Whether voice stay system is enabled
 VOICE_STAY_ENABLED: bool = False
-
 
 # =================================================
 # 💬 DM SUPPORT COOLDOWN
 # =================================================
-
-# user_id -> last DM support interaction timestamp
 DM_SUPPORT_COOLDOWN: Dict[int, float] = {}
