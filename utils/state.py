@@ -1,27 +1,20 @@
-"""
-=================================================
-🔥 HellFire Hangout — Global Runtime State
-=================================================
+# =================================================
+# 🔥 HellFire Hangout — Global Runtime State
+# =================================================
 
-⚠️ CRITICAL RULES:
-• In-memory only (resets on restart)
-• Safe for Railway / Replit / free hosting
-• NO logic
-• NO async
-• NO functions
-• NO side effects
-• ONLY variables & documentation
+# ⚠️ CRITICAL RULES:
+# • In-memory only (resets on restart)
+# • Safe for Railway / Replit / free hosting
+# • NO logic | NO async | NO functions
+# • ONLY variables & documentation
+# =================================================
 
-This file is the SINGLE SOURCE OF RUNTIME TRUTH.
-=================================================
-"""
-
-from typing import Dict, List, Set, Optional
+from typing import Dict, List, Set, Optional, Any
 from datetime import datetime
 
 
 # =================================================
-# 🧾 MODERATION — WARN SYSTEM
+# 🧾 MODERATION — WARN & LOCKDOWN
 # =================================================
 
 # user_id -> total warning count
@@ -34,10 +27,13 @@ WARN_LOGS[user_id] = [
     {
         "reason": str,
         "by": staff_id,
-        "time": datetime
+        "time": float (timestamp)
     }
 ]
 """
+
+# set of channel_ids currently under lockdown
+LOCKDOWN_DATA: Set[int] = set()
 
 
 # =================================================
@@ -65,12 +61,6 @@ TICKET_META[channel_id] = {
 
 # DM support session tracking (anti-spam)
 DM_SUPPORT_SESSIONS: Dict[int, dict] = {}
-"""
-DM_SUPPORT_SESSIONS[user_id] = {
-    "message_id": int,
-    "created_at": datetime
-}
-"""
 
 
 # =================================================
@@ -79,36 +69,23 @@ DM_SUPPORT_SESSIONS[user_id] = {
 
 # staff_id -> moderation activity stats
 STAFF_STATS: Dict[int, dict] = {}
-"""
-STAFF_STATS[staff_id] = {
-    "actions": int,
-    "today": int,
-    "last_action": datetime
-}
-"""
 
 # user_id -> private internal staff notes
 STAFF_NOTES: Dict[int, List[dict]] = {}
-"""
-STAFF_NOTES[user_id] = [
-    {
-        "by": staff_id,
-        "note": str,
-        "time": datetime
-    }
-]
-"""
 
 
 # =================================================
 # 🛡️ AUTOMOD / SECURITY — RUNTIME MEMORY
 # =================================================
 
-# user_id -> recent message timestamps
-MESSAGE_HISTORY: Dict[int, List[datetime]] = {}
+# user_id -> list of recent message timestamps (float) for spam detection
+MESSAGE_HISTORY: Dict[int, List[float]] = {}
+
+# channel_id -> { "author_id": int, "content": str, "timestamp": datetime }
+GHOST_PING_HISTORY: Dict[int, dict] = {}
 
 # user_id -> last automod action timestamp
-AUTOMOD_LAST_ACTION: Dict[int, datetime] = {}
+AUTOMOD_LAST_ACTION: Dict[int, float] = {}
 
 # user_id -> automod strike count
 AUTOMOD_STRIKES: Dict[int, int] = {}
@@ -126,10 +103,10 @@ LAST_MVP_ROTATION: Dict[int, datetime] = {}
 
 
 # =================================================
-# 📊 ACTIVITY — MESSAGE TRACKING (RUNTIME MIRROR)
+# 📊 ACTIVITY — MESSAGE TRACKING
 # =================================================
 
-# user_id -> message count since last restart (debug / future use)
+# user_id -> message count since last restart
 RUNTIME_MESSAGE_COUNT: Dict[int, int] = {}
 
 
@@ -145,7 +122,7 @@ ONBOARDING_MESSAGES: Dict[int, int] = {}
 # ⚙️ GUILD CONFIGURATION (RUNTIME)
 # =================================================
 
-# Primary guild ID (set during &setup)
+# Primary guild ID
 MAIN_GUILD_ID: Optional[int] = None
 
 # Channel IDs
@@ -161,7 +138,7 @@ AUTO_ROLE_ID: Optional[int] = None
 # 👮 STAFF ROLE SYSTEM (HIERARCHY)
 # =================================================
 
-# Staff tier mapping (set by admin setup)
+# Staff tier mapping (Tier Level -> Role ID)
 STAFF_ROLE_TIERS: Dict[int, Optional[int]] = {
     1: None,  # Staff
     2: None,  # Staff+
@@ -176,12 +153,11 @@ STAFF_ROLE_TIERS: Dict[int, Optional[int]] = {
 
 SYSTEM_FLAGS: Dict[str, bool] = {
     "panic_mode": False,
-
-    # Feature toggles
     "automod_enabled": True,
     "mvp_system": True,
     "profile_stats": True,
     "message_tracking": True,
+    "maintenance_mode": False
 }
 
 
@@ -201,4 +177,4 @@ VOICE_STAY_ENABLED: bool = False
 # =================================================
 
 # user_id -> last DM support interaction timestamp
-DM_SUPPORT_COOLDOWN: Dict[int, datetime] = {}
+DM_SUPPORT_COOLDOWN: Dict[int, float] = {}
