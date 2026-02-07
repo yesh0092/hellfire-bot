@@ -109,21 +109,21 @@ class OnboardingView(discord.ui.View):
     # --- STAGE 1 BUTTONS: DISCOVERY ---
 
     @discord.ui.button(label="Friends", style=discord.ButtonStyle.primary, emoji="🤝", row=0)
-    async def friends(self, interaction: discord.Interaction, _):
+    async def friends(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.finalize(interaction, "Fellow Travelers")
 
     @discord.ui.button(label="Social Media", style=discord.ButtonStyle.secondary, emoji="🌐", row=0)
-    async def social(self, interaction: discord.Interaction, _):
+    async def social(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.finalize(interaction, "Ancient Prophecy")
 
     @discord.ui.button(label="Other", style=discord.ButtonStyle.success, emoji="🔮", row=0)
-    async def other(self, interaction: discord.Interaction, _):
+    async def other(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.finalize(interaction, "Fate & Chaos")
 
     # --- STAGE 2 TOOLS: CHARACTER CUSTOMIZATION ---
 
     @discord.ui.button(label="Set Nickname", style=discord.ButtonStyle.gray, emoji="✍️", row=1)
-    async def set_nick(self, interaction: discord.Interaction, _):
+    async def set_nick(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(NicknameModal())
 
     @discord.ui.button(label="Age: 18+", style=discord.ButtonStyle.danger, emoji="🔞", row=1)
@@ -178,7 +178,7 @@ class Onboarding(commands.Cog):
         state.TOTAL_JOINS += 1
         
         # ---------- AUTO ROLE ----------
-        if state.AUTO_ROLE_ID:
+        if hasattr(state, "AUTO_ROLE_ID") and state.AUTO_ROLE_ID:
             role = guild.get_role(state.AUTO_ROLE_ID)
             if role:
                 try:
@@ -187,7 +187,7 @@ class Onboarding(commands.Cog):
                     print(f"Failed to add role to {member.name}: Missing Permissions")
 
         # ---------- SERVER WELCOME (MAIN CHANNEL) ----------
-        if state.WELCOME_CHANNEL_ID:
+        if hasattr(state, "WELCOME_CHANNEL_ID") and state.WELCOME_CHANNEL_ID:
             channel = guild.get_channel(state.WELCOME_CHANNEL_ID)
             if channel:
                 embed = luxury_embed(
@@ -234,7 +234,7 @@ class Onboarding(commands.Cog):
                     "**1.** Set your nickname if you wish.\n"
                     "**2.** Verify your age for restricted scrolls.\n"
                     "**3.** Tell us how you found this domain.\n\n"
-                    "*You have 5 minutes before this scroll burns away.*"
+                    f"*You have 5 minutes before this scroll burns away.*"
                 ),
                 color=COLOR_SECONDARY
             )
@@ -246,7 +246,6 @@ class Onboarding(commands.Cog):
             state.ONBOARDING_MESSAGES[member.id] = msg.id
 
         except (discord.Forbidden, discord.HTTPException):
-            # Log failure to staff if logs are enabled
             if hasattr(state, "BOT_LOG_CHANNEL_ID") and state.BOT_LOG_CHANNEL_ID:
                 log_chan = guild.get_channel(state.BOT_LOG_CHANNEL_ID)
                 if log_chan:
@@ -316,7 +315,7 @@ class Onboarding(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command(name="forceonboard")
-    @commands.has_permissions(manage_members=True)
+    @commands.has_permissions(moderate_members=True) # FIXED: Changed from manage_members
     async def forceonboard(self, ctx, member: discord.Member):
         """Manual trigger for onboarding"""
         await self.on_member_join(member)
