@@ -7,7 +7,6 @@ import asyncio
 class ClockCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        # Set your desired timezone
         self.tz = pytz.timezone('Asia/Kolkata') 
         self.update_clock.start()
 
@@ -19,33 +18,37 @@ class ClockCog(commands.Cog):
         now = datetime.now(self.tz)
         time_str = now.strftime("%I:%M %p")
         
-        await self.bot.change_presence(
-            activity=discord.Activity(
-                type=discord.ActivityType.watching,
-                name=f"⛩️ {time_str} | HellFire"
-            )
-        )
-
-    @tasks.loop(seconds=10) # Check every 10s to ensure we never miss a minute
-    async def update_clock(self):
-        """Updates the bot status, ensuring the time is always fresh."""
         try:
-            await self._do_status_update()
-        except Exception as e:
-            print(f"❌ Clock Loop Error: {e}")
+            await self.bot.change_presence(
+                activity=discord.Activity(
+                    type=discord.ActivityType.watching,
+                    name=f"⛩️ {time_str} | HellFire"
+                )
+            )
+        except discord.HTTPException as e:
+            # If we hit a ratelimit, this will catch it without crashing the loop
+            print(f"⚠️ Discord Ratelimit: {e}")
+
+    @tasks.loop(minutes=1) # Update exactly once a minute
+    async def update_clock(self):
+        """Updates the bot status every minute."""
+        await self._do_status_update()
 
     @update_clock.before_loop
     async def before_update_clock(self):
-        """Pre-syncing the clock logic."""
+        """Precise Sync Logic: Wait until the start of the next minute."""
         await self.bot.wait_until_ready()
         
-        # ENHANCEMENT: Trigger an update IMMEDIATELY on boot
-        # This removes the 'one minute wait' delay.
-        try:
-            await self._do_status_update()
-            print("🕒 Clock System: Initial sync complete.")
-        except:
-            pass
+        # Immediate update on startup
+        await self._do_status_update()
+        
+        # Calculate seconds remaining until the next minute starts (:00 seconds)
+        now = datetime.now(self.tz)
+        seconds_until_next_minute = 60 - now.second
+        
+        print(f"🕒 Clock Sync: Waiting {seconds_until_next_minute}s to align with system clock...")
+        await asyncio.sleep(seconds_until_next_minute)
+        print("🕒 Clock System: Fully Synced.")
 
 async def setup(bot):
     await bot.add_cog(ClockCog(bot))
