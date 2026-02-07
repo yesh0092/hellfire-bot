@@ -158,6 +158,7 @@ class Moderation(commands.Cog):
 
             self.last_spam_action[uid] = now
 
+            # FIX: Used keyword arguments to prevent positional error
             await self._apply_timeout(
                 ctx=None,
                 member=member,
@@ -341,7 +342,7 @@ class Moderation(commands.Cog):
             await ctx.send("❌ User not found or not banned.")
 
     # =====================================================
-    # UTILITY & LOCKDOWN
+    # UTILITY & LOCKDOWN (REVERSIBLE)
     # =====================================================
 
     @commands.command(name="purge", aliases=["clear"])
@@ -378,7 +379,6 @@ class Moderation(commands.Cog):
     async def lockdown(self, ctx):
         """Lockdown the ENTIRE server (Safety Trigger)"""
         msg = await ctx.send("⚠️ **INITIATING SERVER-WIDE LOCKDOWN... PLEASE CONFIRM.**")
-        # In a real scenario, you'd add a reaction confirmation here.
         count = 0
         for channel in ctx.guild.text_channels:
             try:
@@ -386,6 +386,69 @@ class Moderation(commands.Cog):
                 count += 1
             except: continue
         await ctx.send(embed=luxury_embed("🚨 LOCKDOWN COMPLETE", f"Secured {count} channels.", COLOR_DANGER))
+
+    @commands.command(name="unlockdown")
+    @require_level(4)
+    async def unlockdown(self, ctx):
+        """Reverses a server-wide lockdown"""
+        msg = await ctx.send("🔓 **RESTORING SERVER ACCESS...**")
+        count = 0
+        for channel in ctx.guild.text_channels:
+            try:
+                await channel.set_permissions(ctx.guild.default_role, send_messages=None)
+                count += 1
+            except: continue
+        await ctx.send(embed=luxury_embed("🔓 UNLOCKDOWN COMPLETE", f"Restored {count} channels.", COLOR_GOLD))
+
+    # =====================================================
+    # VOICE MODERATION (REVERSIBLE)
+    # =====================================================
+
+    @commands.command(name="vmuteall")
+    @require_level(3)
+    async def vmuteall(self, ctx):
+        """Mutes every user in your current voice channel"""
+        if not ctx.author.voice:
+            return await ctx.send("❌ You must be in a VC.")
+        
+        count = 0
+        for member in ctx.author.voice.channel.members:
+            if member.top_role < ctx.author.top_role:
+                await member.edit(mute=True)
+                count += 1
+        await ctx.send(embed=luxury_embed("🎙️ Voice Mute", f"Muted {count} users.", COLOR_DANGER))
+
+    @commands.command(name="vunmuteall")
+    @require_level(3)
+    async def vunmuteall(self, ctx):
+        """Unmutes every user in your current voice channel"""
+        if not ctx.author.voice:
+            return await ctx.send("❌ You must be in a VC.")
+        
+        count = 0
+        for member in ctx.author.voice.channel.members:
+            await member.edit(mute=False)
+            count += 1
+        await ctx.send(embed=luxury_embed("🎙️ Voice Unmute", f"Unmuted {count} users.", COLOR_GOLD))
+
+    @commands.command(name="vdeafenall")
+    @require_level(3)
+    async def vdeafenall(self, ctx):
+        """Deafens everyone in the current voice channel"""
+        if not ctx.author.voice: return
+        for member in ctx.author.voice.channel.members:
+            if member.top_role < ctx.author.top_role:
+                await member.edit(deafen=True)
+        await ctx.send(embed=luxury_embed("🔇 Voice Deafen", "Deafened everyone in VC.", COLOR_DANGER))
+
+    @commands.command(name="vundeafenall")
+    @require_level(3)
+    async def vundeafenall(self, ctx):
+        """Undeafens everyone in the current voice channel"""
+        if not ctx.author.voice: return
+        for member in ctx.author.voice.channel.members:
+            await member.edit(deafen=False)
+        await ctx.send(embed=luxury_embed("🔊 Voice Undeafen", "Restored hearing for everyone in VC.", COLOR_GOLD))
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Moderation(bot))
