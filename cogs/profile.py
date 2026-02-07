@@ -26,6 +26,10 @@ class Profile(commands.Cog):
         
         return " | ".join(badges) if badges else "👤 Member"
 
+    # =====================================================
+    # IDENTITY COMMAND
+    # =====================================================
+
     @commands.command(name="profile", aliases=["userinfo", "whois", "ui"])
     @commands.guild_only()
     @commands.cooldown(1, 5, commands.BucketType.user)
@@ -34,7 +38,6 @@ class Profile(commands.Cog):
 
         # ---------------- DATABASE FETCH (Enhanced) ----------------
         try:
-            # We fetch message stats and warning counts in one go
             data = db.fetchone(
                 """
                 SELECT messages_week, messages_total, 
@@ -51,8 +54,7 @@ class Profile(commands.Cog):
         msg_total = data["messages_total"] if data else 0
         warn_count = data["warns"] if data else 0
 
-        # ---------------- CALCULATE LEVEL & PROGRESS ----------------
-        # Level = Square root of total messages / 5 (Custom God-Level Scaling)
+        # ---------------- LEVEL LOGIC ----------------
         level = int((msg_total ** 0.5) / 2) if msg_total > 0 else 0
         rank_name = "Unranked"
         if msg_week >= 1000: rank_name = "🔱 Overlord"
@@ -60,22 +62,19 @@ class Profile(commands.Cog):
         elif msg_week >= 250: rank_name = "⚔️ Elite Warrior"
         elif msg_week >= 100: rank_name = "🌟 Rising Star"
 
-        # ---------------- METADATA & PERMS ----------------
+        # ---------------- METADATA ----------------
         joined_ts = int(member.joined_at.timestamp()) if member.joined_at else 0
         created_ts = int(member.created_at.timestamp())
         
-        # Filter key permissions for display
         key_perms = []
         if member.guild_permissions.administrator: key_perms.append("Admin")
         if member.guild_permissions.manage_guild: key_perms.append("Manage Server")
         if member.guild_permissions.ban_members: key_perms.append("Ban Members")
         if member.guild_permissions.manage_messages: key_perms.append("Manage Msgs")
-        
         perms_display = ", ".join(key_perms) if key_perms else "None (General)"
 
-        # ---------------- ROLES PROCESSING ----------------
         roles = [r.mention for r in member.roles if r != ctx.guild.default_role]
-        roles.reverse() # Show highest role first
+        roles.reverse()
         role_display = " ".join(roles[:8]) if roles else "No Roles"
         if len(roles) > 8: role_display += f" (+{len(roles)-8})"
 
@@ -91,46 +90,72 @@ class Profile(commands.Cog):
         )
         
         embed.set_thumbnail(url=member.display_avatar.url)
-        if member.guild_avatar: # Use server-specific avatar if available
+        if member.guild_avatar:
             embed.set_author(name=f"Level {level}", icon_url=member.guild_avatar.url)
 
-        # Activity Field
         embed.add_field(
             name="📊 Activity Stats",
-            value=(
-                f"💬 **Total Msgs:** `{msg_total:,}`\n"
-                f"📈 **Weekly Msgs:** `{msg_week:,}`\n"
-                f"⚠️ **Strikes/Warns:** `{warn_count}`"
-            ),
+            value=f"💬 **Total Msgs:** `{msg_total:,}`\n📈 **Weekly Msgs:** `{msg_week:,}`\n⚠️ **Strikes:** `{warn_count}`",
             inline=True
         )
-
-        # Hierarchy Field
         embed.add_field(
-            name="🛡️ Server Authority",
-            value=(
-                f"🔝 **Top Role:** {member.top_role.mention}\n"
-                f"🔑 **Key Perms:** `{perms_display}`\n"
-                f"🎙️ **Voice:** {'Active' if member.voice else 'Disconnected'}"
-            ),
+            name="🛡️ Authority",
+            value=f"🔝 **Top Role:** {member.top_role.mention}\n🔑 **Perms:** `{perms_display}`\n🎙️ **Voice:** {'Active' if member.voice else 'None'}",
             inline=True
         )
-
-        # Timeline Field (Using Discord Timestamps for dynamic viewing)
         embed.add_field(
             name="📅 Timeline",
-            value=(
-                f"📥 **Joined:** <t:{joined_ts}:R> (<t:{joined_ts}:d>)\n"
-                f"🎂 **Created:** <t:{created_ts}:R> (<t:{created_ts}:d>)"
-            ),
+            value=f"📥 **Joined:** <t:{joined_ts}:R>\n🎂 **Created:** <t:{created_ts}:R>",
             inline=False
         )
-
-        # Roles Field
         embed.add_field(name="🏷️ Role Inventory", value=role_display, inline=False)
-
-        # Interaction Footer
         embed.set_footer(text=f"ID: {member.id} • Command handled by {ctx.author.name}")
+        
+        await ctx.send(embed=embed)
+
+    # =====================================================
+    # VISUAL COMMANDS (AVATAR & BANNER)
+    # =====================================================
+
+    @commands.command(name="avatar", aliases=["av", "pfp"])
+    @commands.guild_only()
+    async def avatar(self, ctx, member: discord.Member = None):
+        """Displays a user's avatar in high resolution"""
+        member = member or ctx.author
+        
+        embed = luxury_embed(
+            title=f"🖼️ {member.name}'s Avatar",
+            description=f"[Download Link]({member.display_avatar.url})",
+            color=COLOR_GOLD
+        )
+        
+        # Logic to show Global vs Server avatar if they differ
+        embed.set_image(url=member.display_avatar.with_size(1024).url)
+        
+        if member.guild_avatar:
+            embed.set_thumbnail(url=member.avatar.url)
+            embed.set_footer(text="Showing Server Avatar (Thumbnail: Global Avatar)")
+        
+        await ctx.send(embed=embed)
+
+    @commands.command(name="banner")
+    @commands.guild_only()
+    async def banner(self, ctx, member: discord.Member = None):
+        """Displays a user's banner (if they have one)"""
+        member = member or ctx.author
+        
+        # Fetch full user object to get the banner
+        user = await self.bot.fetch_user(member.id)
+        
+        if not user.banner:
+            return await ctx.send(embed=luxury_embed("❌ No Banner", f"**{member.name}** does not have a custom banner set.", COLOR_DANGER))
+
+        embed = luxury_embed(
+            title=f"🚩 {member.name}'s Banner",
+            description=f"[Download Link]({user.banner.url})",
+            color=COLOR_GOLD
+        )
+        embed.set_image(url=user.banner.with_size(1024).url)
         
         await ctx.send(embed=embed)
 
