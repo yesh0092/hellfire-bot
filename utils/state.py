@@ -10,7 +10,7 @@ from datetime import datetime
 # =================================================
 
 # Primary guild ID (CRITICAL: Replace with your actual Server ID)
-MAIN_GUILD_ID: int = 123456789012345678
+MAIN_GUILD_ID: int = 1262025273860292628
 
 # Channel IDs
 WELCOME_CHANNEL_ID: Optional[int] = None
